@@ -4,7 +4,6 @@ const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
-const https = require('https');
 const crypto = require('crypto');
 const { spawn, execFile } = require('child_process');
 const DiscordRPC = require('discord-rpc');
@@ -22,7 +21,7 @@ let currentGameProcess = null;
 const BASE_URL = 'http://15.204.254.253/tre/carbonite/';
 const VERSION_URL = `${BASE_URL}version.txt`;
 const SERVER_IP = '15.204.254.253';
-const SERVER_PORT = 44453; // SWG login port (adjust if needed)
+const SERVER_PORT = 44453; // Updated to your SWG login port
 
 // ---------- Logger ----------
 const logFile = path.join(app.getPath('userData'), 'logs', 'launcher.log');
@@ -37,7 +36,7 @@ function log(message, level = 'INFO') {
 
 // ---------- Discord Rich Presence ----------
 function initDiscordRPC() {
-  const clientId = '1490822251304714323'; // Replace with your actual Discord App ID
+  const clientId = '1490822251304714323'; // Your Discord App ID
   DiscordRPC.register(clientId);
   rpc = new DiscordRPC.Client({ transport: 'ipc' });
   rpc.on('ready', () => {
@@ -105,9 +104,10 @@ function createWindow() {
     webPreferences: { nodeIntegration: true, contextIsolation: false, enableRemoteModule: false },
     show: false
   });
-  mainWindow.setMinimumSize(1280, 720);
+  mainWindow.setMinimumSize(1024, 600); // Adjusted for better responsiveness
   mainWindow.loadFile('index.html');
 
+  // Zoom lock
   mainWindow.webContents.on('did-finish-load', async () => {
     try {
       await mainWindow.webContents.setZoomFactor(1);
@@ -115,6 +115,7 @@ function createWindow() {
     } catch (_) {}
   });
 
+  // Hotkeys
   mainWindow.webContents.on('before-input-event', (event, input) => {
     if (input.type === 'keyDown' && input.key === 'F11') {
       event.preventDefault();
@@ -126,10 +127,10 @@ function createWindow() {
   });
 
   mainWindow.once('ready-to-show', () => {
-    const display = screen.getPrimaryDisplay();
-    const work = display.workAreaSize;
-    const target = (work.width >= 1920 && work.height >= 1080) ? { w: 1920, h: 1080 } : { w: 1280, h: 720 };
-    mainWindow.setContentSize(target.w, target.h);
+    const { width, height } = screen.getPrimaryDisplay().workAreaSize;
+    const targetWidth = Math.min(width, 1920);
+    const targetHeight = Math.min(height, 1080);
+    mainWindow.setContentSize(targetWidth, targetHeight);
     mainWindow.center();
     mainWindow.show();
     log('Main window shown');
@@ -396,7 +397,7 @@ ipcMain.handle('server-status', async () => {
     const ping = Date.now() - start;
     return { online: true, ping, method: 'http' };
   } catch {
-    // TCP ping fallback
+    // TCP ping fallback using the specified port
     const net = require('net');
     return new Promise((resolve) => {
       const socket = new net.Socket();
@@ -444,8 +445,7 @@ ipcMain.handle('detect-install-dir', () => {
   return detectInstallDir();
 });
 
-// ---------- Existing Handlers (keep from original) ----------
-// (These are kept as in your original code, but I include them for completeness)
+// ---------- Existing Handlers (file list, MD5, download, settings, etc.) ----------
 ipcMain.handle('load-required-files', async () => {
   return new Promise((resolve, reject) => {
     const url = BASE_URL + 'required-files.json';
@@ -485,9 +485,8 @@ ipcMain.handle('check-md5', async (event, filePath) => {
   });
 });
 
-// Keep original download-file handler as fallback (but patcher overrides)
+// Fallback simple download (used by old scan, but patcher uses its own)
 ipcMain.handle('download-file', async (event, { url, destination, expectedMd5, size }) => {
-  // Simple single download (used by old scan, but patcher uses its own)
   return new Promise((resolve, reject) => {
     const file = fs.createWriteStream(destination);
     const req = http.get(url, (response) => {
