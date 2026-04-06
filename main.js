@@ -14,7 +14,7 @@ app.commandLine.appendSwitch('force-device-scale-factor', '1');
 let mainWindow;
 
 // Keep ONE source of truth for your patch base
-const BASE_URL = 'http://15.204.254.253/tre/';
+const BASE_URL = 'http://15.204.254.253/tre/carbonite/';
 
 function toggleFullscreen(win) {
   if (!win || win.isDestroyed()) return;
