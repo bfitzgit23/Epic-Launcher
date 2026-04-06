@@ -33,7 +33,7 @@
       -webkit-app-region: no-drag;
     }
 
-    /* Background - covers entire window, draggable */
+    /* Background - draggable area */
     .background-wrapper {
       position: fixed;
       top: 0;
@@ -47,7 +47,7 @@
       -webkit-app-region: drag;
     }
 
-    /* Main content layer */
+    /* Main content - explicitly no-drag to allow clicking */
     .main-content {
       position: relative;
       z-index: 2;
@@ -56,9 +56,10 @@
       display: flex;
       flex-direction: column;
       justify-content: space-between;
+      -webkit-app-region: no-drag; /* FIX: prevents drag from blocking clicks */
     }
 
-    /* Window buttons - always top right */
+    /* Window buttons */
     .window-controls {
       position: absolute;
       top: 15px;
@@ -81,6 +82,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      -webkit-app-region: no-drag;
     }
     .win-button:hover { background: rgba(255,255,255,0.10); }
     .close-button {
@@ -90,7 +92,7 @@
     }
     .close-button:hover { background: rgba(255,0,0,.90); }
 
-    /* Main PLAY button - centered left, responsive */
+    /* PLAY button */
     .play-button {
       position: absolute;
       left: 5%;
@@ -109,13 +111,14 @@
       cursor: pointer;
       transition: transform 0.2s, border-color 0.2s;
       font-weight: bold;
+      -webkit-app-region: no-drag;
     }
     .play-button:hover {
       transform: translateY(-50%) scale(1.05);
       border-color: var(--green);
     }
 
-    /* Right side buttons group */
+    /* Right side buttons */
     .side-buttons {
       position: absolute;
       right: 3%;
@@ -139,6 +142,7 @@
       transition: 0.2s ease;
       cursor: pointer;
       font-size: clamp(10px, 2vw, 14px);
+      -webkit-app-region: no-drag;
     }
 
     .side-button {
@@ -181,7 +185,6 @@
       transform: translateY(-1px);
     }
 
-    /* Current directory text */
     #current-directory {
       font-size: clamp(10px, 1.8vw, 12px);
       color: #aaa;
@@ -192,7 +195,7 @@
       overflow-y: auto;
     }
 
-    /* Info panels (server, version, test) - bottom left */
+    /* Info panels */
     .info-panels {
       position: absolute;
       bottom: 20px;
@@ -207,6 +210,7 @@
       max-width: 280px;
       width: auto;
       z-index: 5;
+      -webkit-app-region: no-drag;
     }
     .info-panels div {
       margin: 6px 0;
@@ -229,13 +233,14 @@
       font-size: 10px;
       margin-left: 8px;
       transition: 0.2s;
+      -webkit-app-region: no-drag;
     }
     .test-exe-btn:hover {
       background: var(--green);
       color: black;
     }
 
-    /* Progress container - bottom center, responsive width */
+    /* Progress container */
     .progress-container {
       position: absolute;
       bottom: 20px;
@@ -271,13 +276,14 @@
       color: #66ff66;
     }
 
-    /* Modal remains mostly same, just ensure it's responsive */
+    /* Modal */
     .modal-overlay {
       position: fixed;
       inset: 0;
       background: rgba(0,0,0,0.8);
       z-index: 1000;
       display: none;
+      -webkit-app-region: no-drag;
     }
     .settings-modal {
       position: fixed;
@@ -293,8 +299,8 @@
       max-width: 420px;
       display: none;
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      -webkit-app-region: no-drag;
     }
-    /* ... rest of modal styles unchanged (keep your existing) ... */
     .settings-header {
       display: flex;
       justify-content: space-between;
@@ -344,47 +350,16 @@
       accent-color: var(--green);
     }
 
-    /* Responsive adjustments for very small screens */
     @media (max-width: 800px) {
-      .side-buttons {
-        width: 35vw;
-        min-width: 140px;
-        right: 2%;
-      }
-      .play-button {
-        left: 3%;
-        width: 90px;
-        height: 90px;
-        font-size: 16px;
-      }
-      .info-panels {
-        bottom: 10px;
-        left: 10px;
-        padding: 6px 10px;
-        max-width: 240px;
-      }
-      .info-label {
-        width: 60px;
-      }
+      .side-buttons { width: 35vw; min-width: 140px; right: 2%; }
+      .play-button { left: 3%; width: 90px; height: 90px; font-size: 16px; }
+      .info-panels { bottom: 10px; left: 10px; padding: 6px 10px; max-width: 240px; }
+      .info-label { width: 60px; }
     }
-
     @media (max-width: 600px) {
-      .side-buttons {
-        width: 40vw;
-        gap: 8px;
-      }
-      .play-button {
-        width: 70px;
-        height: 70px;
-        font-size: 14px;
-      }
-      .info-panels {
-        font-size: 9px;
-      }
-      .progress-container {
-        width: 90%;
-        padding: 10px;
-      }
+      .side-buttons { width: 40vw; gap: 8px; }
+      .play-button { width: 70px; height: 70px; font-size: 14px; }
+      .progress-container { width: 90%; padding: 10px; }
     }
   </style>
 </head>
@@ -392,7 +367,7 @@
 <body>
   <div class="background-wrapper"></div>
 
-  <!-- Settings Modal (same as before) -->
+  <!-- Settings Modal -->
   <div class="modal-overlay" id="modal-overlay"></div>
   <div class="settings-modal" id="settings-modal">
     <div class="settings-header">
@@ -423,17 +398,14 @@
   </div>
 
   <div class="main-content">
-    <!-- Window controls -->
     <div class="window-controls">
       <button class="win-button" id="minimize-button" title="Minimize">—</button>
       <button class="win-button" id="maximize-button" title="Maximize/Restore">▢</button>
       <button class="close-button" id="close-button" title="Close">×</button>
     </div>
 
-    <!-- Main PLAY button -->
     <div class="play-button" id="play-button">PLAY</div>
 
-    <!-- Right side buttons -->
     <div class="side-buttons">
       <button class="side-button" id="quick-scan">QUICK SCAN</button>
       <button class="side-button" id="full-scan">FULL SCAN</button>
@@ -449,14 +421,12 @@
       </button>
     </div>
 
-    <!-- Info panels -->
     <div class="info-panels">
       <div><span class="info-label">Server:</span> <span id="server-status">Checking...</span> <button id="refresh-server" class="test-exe-btn">⟳</button></div>
       <div><span class="info-label">Game ver:</span> <span id="game-version">--</span> <button id="check-updates" class="test-exe-btn">Check</button></div>
       <div><span class="info-label">SWGEmu.exe:</span> <span id="exe-status">Not tested</span> <button id="test-exe-button" class="test-exe-btn">Test</button></div>
     </div>
 
-    <!-- Progress area -->
     <div class="progress-container">
       <div class="progress-bar"><div id="total-progress" class="progress-fill"></div></div>
       <div id="total-status" class="status-text">0/0 files</div>
