@@ -362,7 +362,7 @@ window.addEventListener('DOMContentLoaded', () => {
     try {
       const url = (file.url && file.url.startsWith('http'))
         ? file.url
-        : `http://15.204.254.253/tre/${file.name}`;
+        : `http://15.204.254.253/tre/carbonite/${file.name}`;
 
       await ipcRenderer.invoke('download-file', {
         url,
