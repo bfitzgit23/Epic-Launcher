@@ -1,13 +1,13 @@
 {
-  "name": "returns-launcher",
+  "name": "epic-launcher",
   "version": "1.1.0",
-  "description": "Returns Launcher",
+  "description": "Epic Launcher",
   "main": "main.js",
-  "author": "Returns_Dev",
+  "author": "Epic_Dev",
   "license": "CC0-1.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/bfitzgit23/Returns-Launcher"
+    "url": "https://github.com/bfitzgit23/Epic-Launcher"
   },
   "homepage": "https://swgreturns.github.io",
   "keywords": [
@@ -51,8 +51,8 @@
     "uuid": "^9.0.0"
   },
   "build": {
-    "appId": "com.returns.launcher",
-    "productName": "Returns Launcher",
+    "appId": "com.Epic.launcher",
+    "productName": "Epic Launcher",
     "directories": {
       "buildResources": "build",
       "output": "dist"
