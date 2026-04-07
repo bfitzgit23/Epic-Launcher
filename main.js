@@ -1,4 +1,4 @@
-// main.js - SWG Returns Launcher (Optional Discord RPC)
+// main.js - SWG Returns Launcher (Auto-Updater Graceful Fallback)
 const { app, BrowserWindow, ipcMain, dialog, shell, screen } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
@@ -8,16 +8,16 @@ const crypto = require('crypto');
 const { spawn, execFile } = require('child_process');
 const axios = require('axios');
 
-// Optional Discord RPC (graceful fallback)
+// Optional Discord RPC
 let DiscordRPC;
 try {
   DiscordRPC = require('discord-rpc');
 } catch (e) {
-  console.warn('Discord RPC not available, rich presence disabled:', e.message);
+  console.warn('Discord RPC not available:', e.message);
   DiscordRPC = null;
 }
 
-// ---------- DPI / scaling fix ----------
+// ---------- DPI / scaling ----------
 app.commandLine.appendSwitch('high-dpi-support', '1');
 app.commandLine.appendSwitch('force-device-scale-factor', '1');
 
@@ -25,7 +25,6 @@ let mainWindow;
 let rpc;
 let currentGameProcess = null;
 
-// Server configuration
 const BASE_URL = 'http://15.204.254.253/tre/';
 const VERSION_URL = `${BASE_URL}version.txt`;
 const SERVER_IP = '15.204.254.253';
@@ -42,12 +41,9 @@ function log(message, level = 'INFO') {
   } catch (_) {}
 }
 
-// ---------- Discord Rich Presence (optional) ----------
+// ---------- Discord RPC (optional) ----------
 function initDiscordRPC() {
-  if (!DiscordRPC) {
-    log('Discord RPC skipped (module not loaded)');
-    return;
-  }
+  if (!DiscordRPC) return;
   const clientId = '1490822251304714323';
   DiscordRPC.register(clientId);
   rpc = new DiscordRPC.Client({ transport: 'ipc' });
@@ -79,6 +75,26 @@ function updateDiscordStatus(status, details = '') {
     largeImageText: 'Star Wars Galaxies',
     instance: false,
   }).catch(err => log(`Discord RPC setActivity error: ${err.message}`, 'ERROR'));
+}
+
+// ---------- Auto-updater with graceful fallback ----------
+function setupAutoUpdater() {
+  // Disable auto-download to avoid errors if no publisher
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = false;
+  
+  // Silently catch any errors (e.g., no GitHub releases)
+  autoUpdater.on('error', (err) => {
+    log(`Auto-updater error (ignored): ${err.message}`, 'WARN');
+  });
+  
+  // Only check for updates if we have a valid provider (e.g., GitHub token or published versions)
+  // But we'll just call checkForUpdates and let it fail silently.
+  setTimeout(() => {
+    autoUpdater.checkForUpdates().catch(err => {
+      log(`Auto-updater check failed (non-critical): ${err.message}`, 'WARN');
+    });
+  }, 5000);
 }
 
 // ---------- Auto-detect install directory ----------
@@ -151,7 +167,7 @@ function createWindow() {
 app.whenReady().then(() => {
   createWindow();
   initDiscordRPC();
-  autoUpdater.checkForUpdatesAndNotify();
+  setupAutoUpdater();  // Safe auto-updater
   const logDir = path.join(app.getPath('userData'), 'logs');
   if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
   log('Launcher started');
@@ -160,7 +176,7 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 
-// ---------- Auto-updater events ----------
+// ---------- Auto-updater IPC (optional) ----------
 autoUpdater.on('update-available', () => {
   mainWindow.webContents.send('update-available');
   log('Launcher update available');
@@ -340,61 +356,31 @@ async function launchExe(exePath, options = {}) {
   return new Promise((resolve, reject) => {
     if (!fs.existsSync(exePath)) reject(new Error('File not found'));
     const exeDir = path.dirname(exePath);
-    const exeName = path.basename(exePath);
-
     const { width, height } = screen.getPrimaryDisplay().workAreaSize;
     const resArg = `-r ${width}x${height}`;
-
-    const args = [
-      '-c',
-      resArg,
-      '-s',
-      '-nopageflip'
-    ];
-
+    const args = ['-c', resArg, '-s', '-nopageflip'];
     const env = {
       ...process.env,
       __COMPAT_LAYER: 'RunAsInvoker Win7RTM',
       DISABLE_LAYER_AMD_SWITCHABLE_GRAPHICS_1: '1',
       DISABLE_LAYER_NV_OPTIMUS_1: '1'
     };
-
     log(`Launching ${exePath} with args: ${args.join(' ')}`);
-
     const gameProcess = spawn(exePath, args, {
-      detached: true,
-      stdio: 'ignore',
-      cwd: exeDir,
-      windowsHide: true,
-      env: env
+      detached: true, stdio: 'ignore', cwd: exeDir, windowsHide: true, env: env
     });
-
     gameProcess.on('error', (err) => {
       log(`Spawn failed: ${err.message}`, 'ERROR');
-      execFile(exePath, [], {
-        cwd: exeDir,
-        windowsHide: true,
-        env: env
-      }, (execErr, stdout, stderr) => {
-        if (execErr) {
-          reject(new Error(`Both spawn and execFile failed: ${execErr.message}`));
-        } else {
-          resolve({ success: true, pid: gameProcess.pid, method: 'execFile (fallback)' });
-        }
+      execFile(exePath, [], { cwd: exeDir, windowsHide: true, env: env }, (execErr) => {
+        if (execErr) reject(new Error(`Both spawn and execFile failed: ${execErr.message}`));
+        else resolve({ success: true, pid: gameProcess.pid, method: 'execFile' });
       });
     });
-
-    gameProcess.on('exit', (code) => {
-      log(`Game process exited with code ${code}`);
-      if (code !== 0 && code !== null) {
-        log(`Game crashed with exit code ${code}. Common fix: run launcher as Administrator or set SWGEmu.exe to Windows 7 compatibility mode.`, 'WARN');
-      }
-    });
-
+    gameProcess.on('exit', (code) => log(`Game process exited with code ${code}`));
     gameProcess.unref();
     if (gameProcess.pid) {
       currentGameProcess = gameProcess;
-      resolve({ success: true, pid: gameProcess.pid, method: 'spawn (with crash mitigation)' });
+      resolve({ success: true, pid: gameProcess.pid, method: 'spawn' });
     } else {
       reject(new Error('No PID'));
     }
@@ -463,9 +449,7 @@ ipcMain.handle('server-status', async () => {
 
 // ---------- Log Viewer ----------
 ipcMain.handle('get-log-content', () => {
-  if (fs.existsSync(logFile)) {
-    return fs.readFileSync(logFile, 'utf8');
-  }
+  if (fs.existsSync(logFile)) return fs.readFileSync(logFile, 'utf8');
   return '';
 });
 ipcMain.handle('open-log-viewer', () => {
@@ -483,9 +467,7 @@ ipcMain.handle('open-log-viewer', () => {
 });
 
 // ---------- Auto-detect install directory IPC ----------
-ipcMain.handle('detect-install-dir', () => {
-  return detectInstallDir();
-});
+ipcMain.handle('detect-install-dir', () => detectInstallDir());
 
 // ---------- File Management Handlers ----------
 ipcMain.handle('load-required-files', async () => {
