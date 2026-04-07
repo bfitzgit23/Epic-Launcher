@@ -1,4 +1,4 @@
-// main.js - SWG Returns Launcher (Full Feature Set + Zoom Control)
+// main.js - SWG Returns Launcher (Full Feature Set + In-Game FPS Limit)
 const { app, BrowserWindow, ipcMain, dialog, shell, screen } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
@@ -113,7 +113,7 @@ function toggleFullscreen(win) {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1280, height: 720,   // default size, not fullscreen
+    width: 1280, height: 720,
     useContentSize: true,
     frame: false,
     transparent: true,
@@ -133,7 +133,7 @@ function createWindow() {
   mainWindow.setMinimumSize(1024, 600);
   mainWindow.loadFile('index.html');
 
-  // Load saved zoom level (no hardcoded lock)
+  // Load saved zoom level
   mainWindow.webContents.on('did-finish-load', async () => {
     try {
       const settingsPath = path.join(app.getPath('userData'), 'settings.json');
@@ -223,7 +223,7 @@ ipcMain.handle('save-game-version', (event, version) => {
   fs.writeFileSync(path.join(app.getPath('userData'), 'game_version.txt'), version);
 });
 
-// Patcher (multithread with resume)
+// Patcher (multithread with resume) - same as before
 let activeDownloads = new Map();
 let downloadQueue = [];
 let isDownloading = false;
@@ -323,13 +323,19 @@ ipcMain.handle('patcher-resume', () => {
   log('Patcher resumed');
 });
 
-// Reliable EXE launch
-async function launchExe(exePath) {
+// Reliable EXE launch with maxFPS argument
+async function launchExe(exePath, maxFps = 60) {
   return new Promise((resolve, reject) => {
     if (!fs.existsSync(exePath)) reject(new Error('File not found'));
     const exeDir = path.dirname(exePath);
     const { width, height } = screen.getPrimaryDisplay().workAreaSize;
-    const args = ['-c', `-r ${width}x${height}`, '-s', '-nopageflip'];
+    const args = [
+      '-c',
+      `-r ${width}x${height}`,
+      '-s',
+      '-nopageflip',
+      `-maxFPS ${maxFps}`
+    ];
     const env = {
       ...process.env,
       __COMPAT_LAYER: 'RunAsInvoker Win7RTM',
@@ -371,11 +377,11 @@ ipcMain.handle('test-exe', async (event, exePath) => {
     return { valid: true, version };
   } catch (err) { return { valid: false, error: err.message }; }
 });
-ipcMain.handle('launch-game', async (event, exePath) => {
+ipcMain.handle('launch-game', async (event, { exePath, maxFps }) => {
   try {
-    const result = await launchExe(exePath);
+    const result = await launchExe(exePath, maxFps);
     updateDiscordStatus('playing', 'Playing Star Wars Galaxies');
-    log(`Game launched via ${result.method}, PID ${result.pid}`);
+    log(`Game launched via ${result.method}, PID ${result.pid} with max FPS ${maxFps}`);
     return result;
   } catch (err) {
     log(`Launch failed: ${err.message}`, 'ERROR');
@@ -427,7 +433,7 @@ ipcMain.handle('open-log-viewer', () => {
 // Auto-detect install dir IPC
 ipcMain.handle('detect-install-dir', () => detectInstallDir());
 
-// File list, MD5, download, directory selection (unchanged)
+// File list, MD5, download, directory selection (unchanged from previous)
 ipcMain.handle('load-required-files', async () => {
   return new Promise((resolve, reject) => {
     const url = BASE_URL + 'required-files.json';
