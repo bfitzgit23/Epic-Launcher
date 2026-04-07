@@ -25,6 +25,7 @@ let mainWindow;
 let rpc;
 let currentGameProcess = null;
 
+// ---------- BASE URL updated to carbonite subfolder ----------
 const BASE_URL = 'http://15.204.254.253/tre/carbonite/';
 const VERSION_URL = `${BASE_URL}version.txt`;
 const SERVER_IP = '15.204.254.253';
@@ -223,7 +224,7 @@ ipcMain.handle('save-game-version', (event, version) => {
   fs.writeFileSync(path.join(app.getPath('userData'), 'game_version.txt'), version);
 });
 
-// Patcher (multithread with resume) - same as before
+// Patcher (multithread with resume)
 let activeDownloads = new Map();
 let downloadQueue = [];
 let isDownloading = false;
@@ -433,7 +434,7 @@ ipcMain.handle('open-log-viewer', () => {
 // Auto-detect install dir IPC
 ipcMain.handle('detect-install-dir', () => detectInstallDir());
 
-// File list, MD5, download, directory selection (unchanged from previous)
+// File list, MD5, download, directory selection
 ipcMain.handle('load-required-files', async () => {
   return new Promise((resolve, reject) => {
     const url = BASE_URL + 'required-files.json';
