@@ -1,4 +1,4 @@
-// renderer.js - SWG Returns Launcher (Full Feature Set + In-Game FPS Limit)
+// renderer.js - SWG Returns Launcher (Full Feature Set + options.cfg support)
 const { ipcRenderer } = require('electron');
 const fs = require('fs');
 const path = require('path');
@@ -35,7 +35,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const serverStatusSpan = getElement('server-status');
   const refreshServerBtn = getElement('refresh-server');
   const gameVersionSpan = getElement('game-version');
-  const checkUpdatesBtn = getElement('check-upserver-statusdates');
+  const checkUpdatesBtn = getElement('check-updates');
   const exeStatusSpan = getElement('exe-status');
   const testExeButton = getElement('test-exe-button');
   const viewLogViewerButton = getElement('view-log-viewer');
@@ -53,6 +53,8 @@ window.addEventListener('DOMContentLoaded', () => {
   const zoomValue = getElement('zoom-value');
   const maxFpsSlider = getElement('max-fps-slider');
   const maxFpsValue = getElement('max-fps-value');
+  const cameraZoomSlider = getElement('camera-zoom-slider');
+  const cameraZoomValue = getElement('camera-zoom-value');
 
   // ---- State ----
   let isScanning = false;
@@ -132,6 +134,23 @@ window.addEventListener('DOMContentLoaded', () => {
   if (modalOverlay) modalOverlay.addEventListener('click', closeSettingsModal);
   if (settingsModal) settingsModal.addEventListener('click', (e) => e.stopPropagation());
 
+  async function loadGameConfig() {
+    if (!installDir) return;
+    try {
+      const gameConfig = await ipcRenderer.invoke('get-game-config', installDir);
+      if (gameConfig) {
+        if (maxFpsSlider && maxFpsValue) {
+          maxFpsSlider.value = gameConfig.maxFramesPerSecond || 60;
+          maxFpsValue.textContent = `${gameConfig.maxFramesPerSecond || 60} FPS`;
+        }
+        if (cameraZoomSlider && cameraZoomValue) {
+          cameraZoomSlider.value = gameConfig.maxCameraZoom || 10;
+          cameraZoomValue.textContent = cameraZoomSlider.value;
+        }
+      }
+    } catch (err) { console.warn('Could not load game config:', err); }
+  }
+
   async function loadSettings() {
     try {
       const scanMode = await ipcRenderer.invoke('get-scan-mode');
@@ -147,12 +166,9 @@ window.addEventListener('DOMContentLoaded', () => {
           zoomSlider.value = savedZoom;
           zoomValue.textContent = `${savedZoom}%`;
         }
-        if (maxFpsSlider && maxFpsValue) {
-          const savedFps = settings.maxFps || 60;
-          maxFpsSlider.value = savedFps;
-          maxFpsValue.textContent = `${savedFps} FPS`;
-        }
       }
+      // Load game config from options.cfg
+      await loadGameConfig();
     } catch (error) { console.error('Failed to load settings:', error); }
   }
 
@@ -164,17 +180,26 @@ window.addEventListener('DOMContentLoaded', () => {
         autoUpdate: autoUpdateCheckbox ? autoUpdateCheckbox.checked : false,
         minimizeToTray: minimizeToTrayCheckbox ? minimizeToTrayCheckbox.checked : false,
         timeout: timeoutInput ? parseInt(timeoutInput.value, 10) || 30 : 30,
-        zoom: zoomSlider ? parseInt(zoomSlider.value, 10) : 100,
-        maxFps: maxFpsSlider ? parseInt(maxFpsSlider.value, 10) : 60
+        zoom: zoomSlider ? parseInt(zoomSlider.value, 10) : 100
       };
       await ipcRenderer.invoke('save-settings', settings);
+      
+      // Save game config to options.cfg if install directory exists
+      if (installDir) {
+        const gameConfig = {
+          maxFramesPerSecond: maxFpsSlider ? parseInt(maxFpsSlider.value, 10) : 60,
+          maxCameraZoom: cameraZoomSlider ? parseInt(cameraZoomSlider.value, 10) : 10
+        };
+        await ipcRenderer.invoke('save-game-config', installDir, gameConfig);
+      }
+      
       updateStatus('Settings saved successfully');
       closeSettingsModal();
     } catch (error) { updateStatus(`Failed to save settings: ${error.message}`); }
   }
   if (saveSettingsButton) saveSettingsButton.addEventListener('click', saveSettings);
 
-  // ---- Zoom slider live update ----
+  // ---- Slider live display updates ----
   if (zoomSlider && zoomValue) {
     zoomSlider.addEventListener('input', async (e) => {
       const val = parseInt(e.target.value, 10);
@@ -182,12 +207,14 @@ window.addEventListener('DOMContentLoaded', () => {
       await ipcRenderer.invoke('set-zoom', val);
     });
   }
-
-  // ---- In-game FPS slider live update (just UI, saved on save) ----
   if (maxFpsSlider && maxFpsValue) {
     maxFpsSlider.addEventListener('input', (e) => {
-      const val = parseInt(e.target.value, 10);
-      maxFpsValue.textContent = `${val} FPS`;
+      maxFpsValue.textContent = `${e.target.value} FPS`;
+    });
+  }
+  if (cameraZoomSlider && cameraZoomValue) {
+    cameraZoomSlider.addEventListener('input', (e) => {
+      cameraZoomValue.textContent = e.target.value;
     });
   }
 
@@ -201,6 +228,7 @@ window.addEventListener('DOMContentLoaded', () => {
         await ipcRenderer.invoke('save-install-dir', installDir);
         updateStatus(`Install directory set: ${installDir}`);
         checkExeStatus();
+        await loadGameConfig(); // reload game config from new directory
       }
     } catch (error) { updateStatus(`Error selecting directory: ${error.message}`); }
   }
@@ -227,7 +255,7 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ---- Play button (pass max FPS to launcher) ----
+  // ---- Play button (launches game with no extra args) ----
   if (playButton) {
     playButton.addEventListener('click', async () => {
       if (!installDir) {
@@ -243,11 +271,8 @@ window.addEventListener('DOMContentLoaded', () => {
         exePath = picked;
       }
       try {
-        // Get current max FPS setting
-        const settings = await ipcRenderer.invoke('get-settings');
-        const maxFps = settings.maxFps || 60;
-        updateStatus(`Launching ${path.basename(exePath)} with max FPS ${maxFps}...`);
-        const result = await ipcRenderer.invoke('launch-game', { exePath, maxFps });
+        updateStatus(`Launching ${path.basename(exePath)}...`);
+        const result = await ipcRenderer.invoke('launch-game', { exePath });
         updateStatus(`${path.basename(exePath)} launched successfully (PID: ${result.pid})`);
       } catch (error) {
         updateStatus(`Launch failed: ${error.message}`);
@@ -415,6 +440,7 @@ window.addEventListener('DOMContentLoaded', () => {
       await ipcRenderer.invoke('save-install-dir', installDir);
       updateStatus(`Auto-detected install directory: ${installDir}`);
       checkExeStatus();
+      await loadGameConfig();
     }
   }
 
@@ -432,6 +458,7 @@ window.addEventListener('DOMContentLoaded', () => {
       if (currentDirectoryElement) currentDirectoryElement.textContent = installDir;
       updateStatus(`Install directory: ${installDir}`);
       checkExeStatus();
+      await loadGameConfig();
     } else {
       if (currentDirectoryElement) currentDirectoryElement.textContent = 'No install directory set';
       updateStatus('Please set an install location');
