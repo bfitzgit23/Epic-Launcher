@@ -1,4 +1,4 @@
-// main.js - SWG Returns Launcher (Reliable Launch)
+// main.js - SWG Returns Launcher (Full Feature Set + options.cfg support)
 const { app, BrowserWindow, ipcMain, dialog, shell, screen } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
@@ -207,7 +207,58 @@ ipcMain.handle('save-game-version', (event, version) => {
   fs.writeFileSync(path.join(app.getPath('userData'), 'game_version.txt'), version);
 });
 
-// Patcher (unchanged, but included for completeness)
+// ---- options.cfg read/write ----
+ipcMain.handle('get-game-config', async (event, installDir) => {
+  const optionsPath = path.join(installDir, 'options.cfg');
+  const defaults = { maxFramesPerSecond: 60, maxCameraZoom: 10 };
+  if (!fs.existsSync(optionsPath)) return defaults;
+  try {
+    const content = fs.readFileSync(optionsPath, 'utf8');
+    const config = {};
+    const lines = content.split(/\r?\n/);
+    for (const line of lines) {
+      const match = line.match(/^(\w+)\s*=\s*(.+)$/);
+      if (match) {
+        const key = match[1];
+        let value = match[2].trim();
+        if (!isNaN(value)) value = parseFloat(value);
+        config[key] = value;
+      }
+    }
+    return {
+      maxFramesPerSecond: config.maxFramesPerSecond ?? defaults.maxFramesPerSecond,
+      maxCameraZoom: config.maxCameraZoom ?? defaults.maxCameraZoom
+    };
+  } catch (err) {
+    log(`Error reading options.cfg: ${err.message}`, 'ERROR');
+    return defaults;
+  }
+});
+
+ipcMain.handle('save-game-config', async (event, installDir, gameConfig) => {
+  const optionsPath = path.join(installDir, 'options.cfg');
+  try {
+    let existingConfig = {};
+    if (fs.existsSync(optionsPath)) {
+      const content = fs.readFileSync(optionsPath, 'utf8');
+      const lines = content.split(/\r?\n/);
+      for (const line of lines) {
+        const match = line.match(/^(\w+)\s*=\s*(.+)$/);
+        if (match) existingConfig[match[1]] = match[2].trim();
+      }
+    }
+    const newConfig = { ...existingConfig, ...gameConfig };
+    const lines = Object.entries(newConfig).map(([k, v]) => `${k} = ${v}`);
+    fs.writeFileSync(optionsPath, lines.join('\n'), 'utf8');
+    log(`Saved game config to ${optionsPath}`);
+    return { success: true };
+  } catch (err) {
+    log(`Error writing options.cfg: ${err.message}`, 'ERROR');
+    return { success: false, error: err.message };
+  }
+});
+
+// ---- Patcher (multithread with resume) ----
 let activeDownloads = new Map();
 let downloadQueue = [];
 let isDownloading = false;
@@ -307,7 +358,7 @@ ipcMain.handle('patcher-resume', () => {
   log('Patcher resumed');
 });
 
-// ---------- RELIABLE GAME LAUNCH (SIMPLIFIED) ----------
+// ---- Game launch (simplified, no arguments) ----
 ipcMain.handle('test-exe', async (event, exePath) => {
   try {
     if (!fs.existsSync(exePath)) return { valid: false, error: 'File does not exist' };
@@ -319,21 +370,17 @@ ipcMain.handle('test-exe', async (event, exePath) => {
   }
 });
 
-ipcMain.handle('launch-game', async (event, { exePath, maxFps }) => {
+ipcMain.handle('launch-game', async (event, { exePath }) => {
   return new Promise((resolve, reject) => {
     if (!fs.existsSync(exePath)) {
       reject(new Error(`Executable not found: ${exePath}`));
       return;
     }
-
     const exeDir = path.dirname(exePath);
-    log(`Attempting to launch: ${exePath}`);
-
-    // Use execFile (no extra arguments) for maximum compatibility
-    // This mimics how other working launchers start SWGEmu.exe
+    log(`Launching ${exePath} (settings from options.cfg)`);
     const gameProcess = execFile(exePath, [], {
       cwd: exeDir,
-      windowsHide: false,   // Let the game window show normally
+      windowsHide: false,
       detached: true
     }, (error, stdout, stderr) => {
       if (error) {
@@ -341,15 +388,14 @@ ipcMain.handle('launch-game', async (event, { exePath, maxFps }) => {
         if (stderr) log(`stderr: ${stderr}`, 'ERROR');
         reject(error);
       } else {
-        log(`Game process exited cleanly`);
+        log('Game exited cleanly');
       }
     });
-
     gameProcess.unref();
     if (gameProcess.pid) {
       updateDiscordStatus('playing', 'Playing Star Wars Galaxies');
       log(`Game launched with PID: ${gameProcess.pid}`);
-      resolve({ success: true, pid: gameProcess.pid, method: 'execFile' });
+      resolve({ success: true, pid: gameProcess.pid });
     } else {
       reject(new Error('Failed to obtain process ID'));
     }
@@ -399,7 +445,7 @@ ipcMain.handle('open-log-viewer', () => {
 
 ipcMain.handle('detect-install-dir', () => detectInstallDir());
 
-// File list, MD5, download, directory selection (unchanged from previous working version)
+// File list, MD5, download, directory selection
 ipcMain.handle('load-required-files', async () => {
   return new Promise((resolve, reject) => {
     const url = BASE_URL + 'required-files.json';
