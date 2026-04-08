@@ -167,7 +167,6 @@ window.addEventListener('DOMContentLoaded', () => {
           zoomValue.textContent = `${savedZoom}%`;
         }
       }
-      // Load game config from options.cfg
       await loadGameConfig();
     } catch (error) { console.error('Failed to load settings:', error); }
   }
@@ -184,7 +183,6 @@ window.addEventListener('DOMContentLoaded', () => {
       };
       await ipcRenderer.invoke('save-settings', settings);
       
-      // Save game config to options.cfg if install directory exists
       if (installDir) {
         const gameConfig = {
           maxFramesPerSecond: maxFpsSlider ? parseInt(maxFpsSlider.value, 10) : 60,
@@ -228,7 +226,7 @@ window.addEventListener('DOMContentLoaded', () => {
         await ipcRenderer.invoke('save-install-dir', installDir);
         updateStatus(`Install directory set: ${installDir}`);
         checkExeStatus();
-        await loadGameConfig(); // reload game config from new directory
+        await loadGameConfig();
       }
     } catch (error) { updateStatus(`Error selecting directory: ${error.message}`); }
   }
