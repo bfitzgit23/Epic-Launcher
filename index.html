@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>SWG Returns Launcher</title>
+  <title>SWG TFA Launcher</title>
 
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap');
@@ -26,11 +26,22 @@
     body { -webkit-app-region: no-drag; }
     * { box-sizing: border-box; }
 
+    /* Animated hyperspace background */
+    #hyperspace-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      background: radial-gradient(ellipse at center, #0a0f1e 0%, #03050a 100%);
+      pointer-events: none;
+    }
+
     .background-wrapper {
       position: fixed;
       inset: 0;
-      background: url('./img/background.png') no-repeat center center;
-      background-size: cover;
+      background: rgba(0,0,0,0.4); /* semi-transparent overlay for readability */
       border-radius: var(--radius);
       z-index: 1;
       -webkit-app-region: drag;
@@ -355,7 +366,6 @@
       border-color: var(--green);
       box-shadow: 0 0 10px rgba(76, 175, 80, 0.3);
     }
-    /* Force checkbox labels to be visible */
     .setting-item label {
       display: block;
       color: #ddd;
@@ -394,6 +404,7 @@
 </head>
 
 <body>
+  <canvas id="hyperspace-canvas"></canvas>
   <div class="background-wrapper"></div>
 
   <!-- Settings Modal -->
@@ -462,6 +473,7 @@
     <div class="side-buttons">
       <button class="side-button" id="quick-scan">QUICK SCAN</button>
       <button class="side-button" id="full-scan">FULL SCAN (RECHECK ALL)</button>
+      <button class="side-button" id="repair-button">REPAIR FILES</button>
       <button class="side-button" id="install-location">INSTALL LOCATION</button>
       <button class="side-button" id="settings-button">SETTINGS</button>
 
@@ -496,5 +508,65 @@
   </div>
 
   <script src="renderer.js"></script>
+  <script>
+    // Animated hyperspace background (stars + warp effect)
+    (function() {
+      const canvas = document.getElementById('hyperspace-canvas');
+      const ctx = canvas.getContext('2d');
+      let width, height;
+      let stars = [];
+      let numStars = 300;
+      let speed = 5;
+
+      function initStars() {
+        stars = [];
+        for (let i = 0; i < numStars; i++) {
+          stars.push({
+            x: Math.random() * width * 2 - width,
+            y: Math.random() * height * 2 - height,
+            z: Math.random() * width,
+            size: 1,
+            speed: 1 + Math.random() * 3
+          });
+        }
+      }
+
+      function resize() {
+        width = window.innerWidth;
+        height = window.innerHeight;
+        canvas.width = width;
+        canvas.height = height;
+        initStars();
+      }
+
+      function draw() {
+        ctx.fillStyle = 'rgba(0,0,0,0.2)';
+        ctx.fillRect(0, 0, width, height);
+        ctx.fillStyle = 'white';
+        for (let i = 0; i < stars.length; i++) {
+          const s = stars[i];
+          // Move star toward center (warp effect)
+          s.z -= s.speed * speed;
+          if (s.z <= 0) {
+            s.z = width;
+            s.x = Math.random() * width * 2 - width;
+            s.y = Math.random() * height * 2 - height;
+          }
+          const x = s.x / (s.z / width) + width / 2;
+          const y = s.y / (s.z / width) + height / 2;
+          const r = (1 - s.z / width) * 3;
+          ctx.beginPath();
+          ctx.arc(x, y, r, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(255,255,255,${1 - s.z / width})`;
+          ctx.fill();
+        }
+        requestAnimationFrame(draw);
+      }
+
+      window.addEventListener('resize', resize);
+      resize();
+      draw();
+    })();
+  </script>
 </body>
 </html>
