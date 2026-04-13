@@ -1,4 +1,4 @@
-// main.js - SWG TFA Launcher (Genesis FPS patching + login config)
+// main.js - SWG TFA Launcher (NGE / swg-source)
 const { app, BrowserWindow, ipcMain, dialog, shell, screen } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
@@ -84,7 +84,7 @@ autoUpdater.on('update-available', () => mainWindow && mainWindow.webContents.se
 autoUpdater.on('update-downloaded', () => mainWindow && mainWindow.webContents.send('update-downloaded'));
 ipcMain.handle('restart-and-update', () => autoUpdater.quitAndInstall());
 
-// Auto-detect install dir
+// Auto-detect install dir (now looks for SwgClient_r.exe)
 function detectInstallDir() {
   const commonPaths = [
     'C:\\Program Files\\SWGEmu', 'C:\\SWGEmu', 'D:\\SWGEmu',
@@ -95,7 +95,7 @@ function detectInstallDir() {
     app.getPath('home') + '\\SWGEmu',
   ];
   for (const p of commonPaths) {
-    if (fs.existsSync(p) && fs.existsSync(path.join(p, 'SWGEmu.exe'))) return p;
+    if (fs.existsSync(p) && fs.existsSync(path.join(p, 'SwgClient_r.exe'))) return p;
   }
   return null;
 }
@@ -274,11 +274,11 @@ ipcMain.handle('patch-game-fps', async (event, exePath, fps) => {
         floatBuf.writeFloatLE(fps);
         fs.writeSync(fd, floatBuf, 0, 4, 0x1156);
         fs.closeSync(fd);
-        log(`Patched SWGEmu.exe FPS to ${fps} at offset 0x1156`);
+        log(`Patched ${path.basename(exePath)} FPS to ${fps} at offset 0x1156`);
         resolve({ success: true });
       } else {
         fs.closeSync(fd);
-        resolve({ success: false, error: 'Executable signature mismatch – cannot patch FPS' });
+        resolve({ success: false, error: 'Executable signature mismatch – cannot patch FPS (NGE may use different offset)' });
       }
     } catch (err) {
       log(`FPS patching error: ${err.message}`, 'ERROR');
@@ -547,7 +547,7 @@ ipcMain.handle('select-directory', async () => {
   return result.canceled ? null : result.filePaths[0];
 });
 ipcMain.handle('select-file', async () => {
-  const result = await dialog.showOpenDialog({ properties: ['openFile'], title: 'Select SWGEmu.exe', filters: [{ name: 'Executable', extensions: ['exe'] }] });
+  const result = await dialog.showOpenDialog({ properties: ['openFile'], title: 'Select SwgClient_r.exe', filters: [{ name: 'Executable', extensions: ['exe'] }] });
   return result.canceled ? null : result.filePaths[0];
 });
 
@@ -601,7 +601,7 @@ ipcMain.handle('open-logs', async () => {
   const logPath = path.join(app.getPath('userData'), 'logs');
   if (!fs.existsSync(logPath)) fs.mkdirSync(logPath, { recursive: true });
   const logFileFull = path.join(logPath, 'launcher.log');
-  if (!fs.existsSync(logFileFull)) fs.writeFileSync(logFileFull, `SWG TFA Launcher Log\nCreated: ${new Date().toISOString()}\n\n`);
+  if (!fs.existsSync(logFileFull)) fs.writeFileSync(logFileFull, `SWG Returns Launcher Log\nCreated: ${new Date().toISOString()}\n\n`);
   shell.openPath(logFileFull);
   return { success: true };
 });
