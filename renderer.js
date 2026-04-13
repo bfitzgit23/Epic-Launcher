@@ -1,4 +1,4 @@
-// renderer.js - SWG Returns Launcher (NGE + Repair + Hyperspace)
+// renderer.js - SWG Returns Launcher (NGE / swg-source)
 const { ipcRenderer } = require('electron');
 const fs = require('fs');
 const path = require('path');
@@ -240,10 +240,10 @@ window.addEventListener('DOMContentLoaded', () => {
   }
   if (installLocationButton) installLocationButton.addEventListener('click', showInstallLocationDialog);
 
-  // ---- EXE test ----
+  // ---- EXE test (now uses SwgClient_r.exe) ----
   async function checkExeStatus() {
     if (!installDir) { if (exeStatusSpan) exeStatusSpan.textContent = 'No directory'; return; }
-    const exePath = path.join(installDir, 'SWGEmu.exe');
+    const exePath = path.join(installDir, 'SwgClient_r.exe');
     if (!fs.existsSync(exePath)) { if (exeStatusSpan) exeStatusSpan.textContent = 'Not found'; return; }
     const result = await ipcRenderer.invoke('test-exe', exePath);
     if (exeStatusSpan) exeStatusSpan.textContent = result.valid ? `Valid (${result.version || 'v?'})` : `Invalid: ${result.error}`;
@@ -251,8 +251,8 @@ window.addEventListener('DOMContentLoaded', () => {
   if (testExeButton) {
     testExeButton.addEventListener('click', async () => {
       if (!installDir) { updateStatus('Set install directory first'); return; }
-      const exePath = path.join(installDir, 'SWGEmu.exe');
-      if (!fs.existsSync(exePath)) { updateStatus('SWGEmu.exe not found'); return; }
+      const exePath = path.join(installDir, 'SwgClient_r.exe');
+      if (!fs.existsSync(exePath)) { updateStatus('SwgClient_r.exe not found'); return; }
       updateStatus('Testing EXE...');
       const result = await ipcRenderer.invoke('test-exe', exePath);
       if (result.valid) updateStatus(`EXE valid, version: ${result.version || 'unknown'}`);
@@ -261,7 +261,55 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ---- Core scan/repair function (mode: 'quick', 'full', 'repair') ----
+  // ---- Play button (NGE version) ----
+  if (playButton) {
+    playButton.addEventListener('click', async () => {
+      if (!installDir) {
+        updateStatus('Please set an install location first');
+        await showInstallLocationDialog();
+        if (!installDir) return;
+      }
+      let exePath = path.join(installDir, 'SwgClient_r.exe');
+      if (!fs.existsSync(exePath)) {
+        updateStatus('SwgClient_r.exe not found. Please locate manually.');
+        const picked = await ipcRenderer.invoke('select-file');
+        if (!picked) return;
+        exePath = picked;
+        installDir = path.dirname(exePath);
+        await ipcRenderer.invoke('save-install-dir', installDir);
+        if (currentDirectoryElement) currentDirectoryElement.textContent = installDir;
+      }
+      
+      try {
+        const settings = await ipcRenderer.invoke('get-settings');
+        const desiredFps = settings.maxFps || 60;
+        updateStatus(`Setting max FPS to ${desiredFps}...`);
+        const patchResult = await ipcRenderer.invoke('patch-game-fps', exePath, desiredFps);
+        if (!patchResult.success) {
+          updateStatus(`Warning: Could not patch FPS: ${patchResult.error}`);
+        } else {
+          updateStatus(`FPS patched to ${desiredFps}`);
+        }
+        
+        const serverInfo = await ipcRenderer.invoke('get-server-info');
+        const gameConfig = await ipcRenderer.invoke('get-game-config', installDir);
+        const zoom = gameConfig.maxCameraZoom || 10;
+        const loginCfg = `[ClientGame]\r\nloginServerAddress0=${serverInfo.ip}\r\nloginServerPort0=${serverInfo.port}\r\nfreeChaseCameraMaximumZoom=${zoom}\r\n0fd345d9 = true\r\n`;
+        const loginCfgPath = path.join(installDir, 'swgemu_login.cfg');
+        fs.writeFileSync(loginCfgPath, loginCfg, 'utf8');
+        updateStatus('Login configuration written');
+        
+        const ram = settings.ram || 750;
+        const result = await ipcRenderer.invoke('launch-game', { exePath, ram });
+        updateStatus(`SwgClient_r.exe launched successfully (PID: ${result.pid})`);
+      } catch (error) {
+        updateStatus(`Launch failed: ${error.message}`);
+        alert(`Failed to launch game:\n${error.message}\n\nCheck antivirus or file permissions.`);
+      }
+    });
+  }
+
+  // ---- Core scan/repair function ----
   async function startScan(mode) {
     if (isScanning) return updateStatus('Scan already in progress');
     isScanning = true;
@@ -291,9 +339,7 @@ window.addEventListener('DOMContentLoaded', () => {
             if (!valid) console.warn(`[MD5 Mismatch] ${file.name}: local=${localMd5}, expected=${file.md5}`);
           } catch (err) { valid = false; }
         }
-        // In repair mode, force re-download of any missing or mismatched file
         if (mode === 'repair' && !valid) filesToDownload.push(file);
-        // In quick/full mode, only download if file is missing or mismatched (full also checks all, but same logic)
         else if (mode !== 'repair' && !valid) filesToDownload.push(file);
         updateProgress(i + 1, totalFiles, 'total');
       }
@@ -377,54 +423,6 @@ window.addEventListener('DOMContentLoaded', () => {
     require('electron').shell.openExternal('https://www.paypal.me/Fitzpatrick251');
     updateStatus('Opening PayPal donation page...');
   });
-
-  // ---- Play button (Genesis FPS patching + login config) ----
-  if (playButton) {
-    playButton.addEventListener('click', async () => {
-      if (!installDir) {
-        updateStatus('Please set an install location first');
-        await showInstallLocationDialog();
-        if (!installDir) return;
-      }
-      let exePath = path.join(installDir, 'SWGEmu.exe');
-      if (!fs.existsSync(exePath)) {
-        updateStatus('SWGEmu.exe not found. Please locate manually.');
-        const picked = await ipcRenderer.invoke('select-file');
-        if (!picked) return;
-        exePath = picked;
-        installDir = path.dirname(exePath);
-        await ipcRenderer.invoke('save-install-dir', installDir);
-        if (currentDirectoryElement) currentDirectoryElement.textContent = installDir;
-      }
-      
-      try {
-        const settings = await ipcRenderer.invoke('get-settings');
-        const desiredFps = settings.maxFps || 60;
-        updateStatus(`Setting max FPS to ${desiredFps}...`);
-        const patchResult = await ipcRenderer.invoke('patch-game-fps', exePath, desiredFps);
-        if (!patchResult.success) {
-          updateStatus(`Warning: Could not patch FPS: ${patchResult.error}`);
-        } else {
-          updateStatus(`FPS patched to ${desiredFps}`);
-        }
-        
-        const serverInfo = await ipcRenderer.invoke('get-server-info');
-        const gameConfig = await ipcRenderer.invoke('get-game-config', installDir);
-        const zoom = gameConfig.maxCameraZoom || 10;
-        const loginCfg = `[ClientGame]\r\nloginServerAddress0=${serverInfo.ip}\r\nloginServerPort0=${serverInfo.port}\r\nfreeChaseCameraMaximumZoom=${zoom}\r\n0fd345d9 = true\r\n`;
-        const loginCfgPath = path.join(installDir, 'swgemu_login.cfg');
-        fs.writeFileSync(loginCfgPath, loginCfg, 'utf8');
-        updateStatus('Login configuration written');
-        
-        const ram = settings.ram || 750;
-        const result = await ipcRenderer.invoke('launch-game', { exePath, ram });
-        updateStatus(`${path.basename(exePath)} launched successfully (PID: ${result.pid})`);
-      } catch (error) {
-        updateStatus(`Launch failed: ${error.message}`);
-        alert(`Failed to launch game:\n${error.message}\n\nCheck antivirus or file permissions.`);
-      }
-    });
-  }
 
   // ---- Server status ----
   async function refreshServerStatus() {
