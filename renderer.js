@@ -1,4 +1,4 @@
-// renderer.js - SWG Returns Launcher (NGE / swg-source)
+// renderer.js - SWG TFA Launcher (NGE / swg-source)
 const { ipcRenderer } = require('electron');
 const fs = require('fs');
 const path = require('path');
