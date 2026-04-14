@@ -1,4 +1,4 @@
-// main.js - SWG TFA Launcher (NGE / swg-source)
+// main.js - SWG Returns Launcher (NGE / swg-source) with retry & longer timeout
 const { app, BrowserWindow, ipcMain, dialog, shell, screen } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
@@ -269,7 +269,6 @@ ipcMain.handle('patch-game-fps', async (event, exePath, fps) => {
       const buf = Buffer.alloc(7);
       const bytesRead = fs.readSync(fd, buf, 0, 7, 0x1153);
       if (bytesRead === 7 && buf.readUInt8(0) === 0xc7 && buf.readUInt8(1) === 0x45 && buf.readUInt8(2) === 0x94) {
-        // Patch the float at offset 0x1156
         const floatBuf = Buffer.alloc(4);
         floatBuf.writeFloatLE(fps);
         fs.writeSync(fd, floatBuf, 0, 4, 0x1156);
@@ -278,7 +277,7 @@ ipcMain.handle('patch-game-fps', async (event, exePath, fps) => {
         resolve({ success: true });
       } else {
         fs.closeSync(fd);
-        resolve({ success: false, error: 'Executable signature mismatch – cannot patch FPS (NGE may use different offset)' });
+        resolve({ success: false, error: 'Executable signature mismatch – cannot patch FPS' });
       }
     } catch (err) {
       log(`FPS patching error: ${err.message}`, 'ERROR');
@@ -292,7 +291,7 @@ ipcMain.handle('get-server-info', async () => {
   return { ip: SERVER_IP, port: SERVER_PORT };
 });
 
-// ---- Game launch (Genesis style: spawn with env vars and arguments) ----
+// ---- Game launch (Genesis style) ----
 ipcMain.handle('test-exe', async (event, exePath) => {
   try {
     if (!fs.existsSync(exePath)) return { valid: false, error: 'File does not exist' };
@@ -342,14 +341,16 @@ ipcMain.handle('launch-game', async (event, { exePath, ram }) => {
   });
 });
 
-// ---- Patcher (multithread with resume) ----
+// ---- Patcher (multithread with resume, retry, and longer timeout) ----
 let activeDownloads = new Map();
 let downloadQueue = [];
 let isDownloading = false;
 let patcherPaused = false;
 const MAX_CONCURRENT = 4;
+const MAX_RETRIES = 3;
+const DOWNLOAD_TIMEOUT = 120000; // 120 seconds
 
-async function downloadFileWithResume(url, destination, expectedMd5, size, fileId) {
+async function downloadFileWithResume(url, destination, expectedMd5, size, fileId, retryCount = 0) {
   return new Promise((resolve, reject) => {
     const dir = path.dirname(destination);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -398,20 +399,43 @@ async function downloadFileWithResume(url, destination, expectedMd5, size, fileI
       });
       response.on('error', reject);
     });
-    req.on('error', reject);
-    req.setTimeout(30000, () => { req.destroy(); reject(new Error('Timeout')); });
+    req.on('error', (err) => {
+      if (retryCount < MAX_RETRIES) {
+        log(`Download failed for ${fileId}, retrying (${retryCount + 1}/${MAX_RETRIES})...`, 'WARN');
+        setTimeout(() => {
+          downloadFileWithResume(url, destination, expectedMd5, size, fileId, retryCount + 1)
+            .then(resolve).catch(reject);
+        }, 2000);
+      } else {
+        reject(err);
+      }
+    });
+    req.setTimeout(DOWNLOAD_TIMEOUT, () => {
+      req.destroy();
+      if (retryCount < MAX_RETRIES) {
+        log(`Timeout for ${fileId}, retrying (${retryCount + 1}/${MAX_RETRIES})...`, 'WARN');
+        setTimeout(() => {
+          downloadFileWithResume(url, destination, expectedMd5, size, fileId, retryCount + 1)
+            .then(resolve).catch(reject);
+        }, 2000);
+      } else {
+        reject(new Error(`Timeout after ${DOWNLOAD_TIMEOUT / 1000}s (${MAX_RETRIES} retries)`));
+      }
+    });
   });
 }
+
 async function processQueue() {
   if (patcherPaused || isDownloading) return;
   while (activeDownloads.size < MAX_CONCURRENT && downloadQueue.length > 0) {
     const { file, destination, fileId, resolve, reject } = downloadQueue.shift();
     isDownloading = true;
-    downloadFileWithResume(file.url, destination, file.md5, file.size, fileId)
+    downloadFileWithResume(file.url, destination, file.md5, file.size, fileId, 0)
       .then(resolve).catch(reject)
       .finally(() => { isDownloading = false; processQueue(); });
   }
 }
+
 ipcMain.handle('patcher-start', async (event, files, installDir) => {
   downloadQueue = [];
   activeDownloads.clear();
@@ -430,6 +454,7 @@ ipcMain.handle('patcher-start', async (event, files, installDir) => {
   processQueue();
   return { started: true, total: files.length };
 });
+
 ipcMain.handle('patcher-pause', () => {
   patcherPaused = true;
   for (let [id, { req }] of activeDownloads) req.pause();
