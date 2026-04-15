@@ -1,4 +1,4 @@
-// main.js - SWG Returns Launcher (NGE / swg-source) with retry & longer timeout
+// main.js - SWG Returns Launcher (Carbonite / SWGEmu.exe)
 const { app, BrowserWindow, ipcMain, dialog, shell, screen } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
@@ -8,7 +8,6 @@ const crypto = require('crypto');
 const { execFile, spawn } = require('child_process');
 const axios = require('axios');
 
-// Optional Discord RPC
 let DiscordRPC;
 try {
   DiscordRPC = require('discord-rpc');
@@ -23,7 +22,7 @@ app.commandLine.appendSwitch('force-device-scale-factor', '1');
 let mainWindow;
 let rpc;
 
-const BASE_URL = 'http://15.204.254.253/tre/nge/';
+const BASE_URL = 'http://15.204.254.253/tre/carbonite/';
 const VERSION_URL = `${BASE_URL}version.txt`;
 const SERVER_IP = '15.204.254.253';
 const SERVER_PORT = 44453;
@@ -36,7 +35,6 @@ function log(message, level = 'INFO') {
   try { fs.appendFileSync(logFile, logLine, { flag: 'a' }); } catch (_) {}
 }
 
-// Discord RPC (optional)
 function initDiscordRPC() {
   if (!DiscordRPC) return;
   const clientId = '1490822251304714323';
@@ -71,7 +69,6 @@ function updateDiscordStatus(status, details = '') {
   }).catch(err => log(`Discord RPC setActivity error: ${err.message}`, 'ERROR'));
 }
 
-// Auto-updater (silent fallback)
 function setupAutoUpdater() {
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = false;
@@ -84,7 +81,6 @@ autoUpdater.on('update-available', () => mainWindow && mainWindow.webContents.se
 autoUpdater.on('update-downloaded', () => mainWindow && mainWindow.webContents.send('update-downloaded'));
 ipcMain.handle('restart-and-update', () => autoUpdater.quitAndInstall());
 
-// Auto-detect install dir (now looks for SwgClient_r.exe)
 function detectInstallDir() {
   const commonPaths = [
     'C:\\Program Files\\SWGEmu', 'C:\\SWGEmu', 'D:\\SWGEmu',
@@ -95,7 +91,7 @@ function detectInstallDir() {
     app.getPath('home') + '\\SWGEmu',
   ];
   for (const p of commonPaths) {
-    if (fs.existsSync(p) && fs.existsSync(path.join(p, 'SwgClient_r.exe'))) return p;
+    if (fs.existsSync(p) && fs.existsSync(path.join(p, 'SWGEmu.exe'))) return p;
   }
   return null;
 }
@@ -162,7 +158,6 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 
-// IPC: Window controls
 ipcMain.handle('window:minimize', () => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.minimize(); });
 ipcMain.handle('window:maximizeToggle', () => {
   if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -173,7 +168,6 @@ ipcMain.handle('window:toggleFullscreen', () => toggleFullscreen(mainWindow));
 ipcMain.handle('window:isMaximized', () => mainWindow && !mainWindow.isDestroyed() ? mainWindow.isMaximized() : false);
 ipcMain.handle('window:isFullscreen', () => mainWindow && !mainWindow.isDestroyed() ? mainWindow.isFullScreen() : false);
 
-// IPC: Zoom control
 ipcMain.handle('set-zoom', async (event, percent) => {
   if (mainWindow && !mainWindow.isDestroyed()) {
     const factor = percent / 100;
@@ -189,7 +183,6 @@ ipcMain.handle('set-zoom', async (event, percent) => {
   }
 });
 
-// Game version checker
 ipcMain.handle('check-game-version', async () => {
   try {
     const response = await axios.get(VERSION_URL, { timeout: 5000 });
@@ -207,7 +200,6 @@ ipcMain.handle('save-game-version', (event, version) => {
   fs.writeFileSync(path.join(app.getPath('userData'), 'game_version.txt'), version);
 });
 
-// ---- options.cfg read/write (for camera zoom only) ----
 ipcMain.handle('get-game-config', async (event, installDir) => {
   const optionsPath = path.join(installDir, 'options.cfg');
   const defaults = { maxCameraZoom: 10 };
@@ -257,7 +249,6 @@ ipcMain.handle('save-game-config', async (event, installDir, gameConfig) => {
   }
 });
 
-// ---- Genesis FPS patching (write float at offset 0x1156) ----
 ipcMain.handle('patch-game-fps', async (event, exePath, fps) => {
   return new Promise((resolve) => {
     if (!fs.existsSync(exePath)) {
@@ -273,7 +264,7 @@ ipcMain.handle('patch-game-fps', async (event, exePath, fps) => {
         floatBuf.writeFloatLE(fps);
         fs.writeSync(fd, floatBuf, 0, 4, 0x1156);
         fs.closeSync(fd);
-        log(`Patched ${path.basename(exePath)} FPS to ${fps} at offset 0x1156`);
+        log(`Patched SWGEmu.exe FPS to ${fps} at offset 0x1156`);
         resolve({ success: true });
       } else {
         fs.closeSync(fd);
@@ -286,12 +277,10 @@ ipcMain.handle('patch-game-fps', async (event, exePath, fps) => {
   });
 });
 
-// ---- Get server info for login config ----
 ipcMain.handle('get-server-info', async () => {
   return { ip: SERVER_IP, port: SERVER_PORT };
 });
 
-// ---- Game launch (Genesis style) ----
 ipcMain.handle('test-exe', async (event, exePath) => {
   try {
     if (!fs.existsSync(exePath)) return { valid: false, error: 'File does not exist' };
@@ -341,14 +330,14 @@ ipcMain.handle('launch-game', async (event, { exePath, ram }) => {
   });
 });
 
-// ---- Patcher (multithread with resume, retry, and longer timeout) ----
+// Patcher (multithread with resume, retry, and longer timeout)
 let activeDownloads = new Map();
 let downloadQueue = [];
 let isDownloading = false;
 let patcherPaused = false;
 const MAX_CONCURRENT = 4;
 const MAX_RETRIES = 3;
-const DOWNLOAD_TIMEOUT = 120000; // 120 seconds
+const DOWNLOAD_TIMEOUT = 120000;
 
 async function downloadFileWithResume(url, destination, expectedMd5, size, fileId, retryCount = 0) {
   return new Promise((resolve, reject) => {
@@ -467,7 +456,6 @@ ipcMain.handle('patcher-resume', () => {
   log('Patcher resumed');
 });
 
-// ---- Server status ----
 ipcMain.handle('server-status', async () => {
   const start = Date.now();
   try {
@@ -489,7 +477,6 @@ ipcMain.handle('server-status', async () => {
   }
 });
 
-// Log viewer
 ipcMain.handle('get-log-content', () => {
   if (fs.existsSync(logFile)) return fs.readFileSync(logFile, 'utf8');
   return '';
@@ -510,7 +497,6 @@ ipcMain.handle('open-log-viewer', () => {
 
 ipcMain.handle('detect-install-dir', () => detectInstallDir());
 
-// File list, MD5, download, directory selection
 ipcMain.handle('load-required-files', async () => {
   return new Promise((resolve, reject) => {
     const url = BASE_URL + 'required-files.json';
@@ -572,11 +558,10 @@ ipcMain.handle('select-directory', async () => {
   return result.canceled ? null : result.filePaths[0];
 });
 ipcMain.handle('select-file', async () => {
-  const result = await dialog.showOpenDialog({ properties: ['openFile'], title: 'Select SwgClient_r.exe', filters: [{ name: 'Executable', extensions: ['exe'] }] });
+  const result = await dialog.showOpenDialog({ properties: ['openFile'], title: 'Select SWGEmu.exe', filters: [{ name: 'Executable', extensions: ['exe'] }] });
   return result.canceled ? null : result.filePaths[0];
 });
 
-// Settings
 const getSettingsPath = () => path.join(app.getPath('userData'), 'settings.json');
 ipcMain.handle('save-settings', (event, settings) => {
   try {
