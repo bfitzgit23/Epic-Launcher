@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-  <title>SWG Returns Launcher (NGE)</title>
+  <title>SWG TFA Launcher</title>
 
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap');
@@ -33,7 +33,6 @@
       -webkit-app-region: no-drag;
     }
 
-    /* Animated hyperspace background */
     #hyperspace-canvas {
       position: fixed;
       top: 0;
@@ -45,7 +44,6 @@
       pointer-events: none;
     }
 
-    /* Semi-transparent overlay (draggable area) */
     .background-wrapper {
       position: fixed;
       inset: 0;
@@ -55,7 +53,6 @@
       -webkit-app-region: drag;
     }
 
-    /* Main content - no drag, full size, flex column */
     .main-content {
       position: relative;
       z-index: 2;
@@ -67,7 +64,6 @@
       -webkit-app-region: no-drag;
     }
 
-    /* Window controls - absolute top right */
     .window-controls {
       position: absolute;
       top: 15px;
@@ -100,7 +96,6 @@
     }
     .close-button:hover { background: rgba(255,0,0,.90); }
 
-    /* PLAY button - left side, centered vertically */
     .play-button {
       position: absolute;
       left: 5%;
@@ -126,7 +121,6 @@
       border-color: var(--green);
     }
 
-    /* Right side buttons group */
     .side-buttons {
       position: absolute;
       right: 3%;
@@ -202,7 +196,6 @@
       overflow-y: auto;
     }
 
-    /* Info panels (bottom left) */
     .info-panels {
       position: absolute;
       bottom: 20px;
@@ -247,7 +240,6 @@
       color: black;
     }
 
-    /* Progress container - bottom center, responsive width */
     .progress-container {
       position: absolute;
       bottom: 20px;
@@ -283,7 +275,6 @@
       color: #66ff66;
     }
 
-    /* Modal (responsive) */
     .modal-overlay {
       position: fixed;
       inset: 0;
@@ -380,7 +371,6 @@
       cursor: pointer;
     }
 
-    /* Responsive adjustments */
     @media (max-width: 800px) {
       .side-buttons { width: 32vw; min-width: 140px; right: 2%; }
       .play-button { left: 3%; width: 90px; height: 90px; font-size: 16px; }
@@ -399,7 +389,6 @@
   <canvas id="hyperspace-canvas"></canvas>
   <div class="background-wrapper"></div>
 
-  <!-- Settings Modal -->
   <div class="modal-overlay" id="modal-overlay"></div>
   <div class="settings-modal" id="settings-modal">
     <div class="settings-header">
@@ -469,11 +458,11 @@
       </button>
     </div>
 
-    <!-- Info Panels – updated executable label -->
+    <!-- Info panel – now shows SWGEmu.exe -->
     <div class="info-panels">
       <div><span class="info-label">Server:</span> <span id="server-status">Checking...</span> <button id="refresh-server" class="test-exe-btn">⟳</button></div>
       <div><span class="info-label">Game ver:</span> <span id="game-version">--</span> <button id="check-updates" class="test-exe-btn">Check</button></div>
-      <div><span class="info-label">SwgClient_r.exe:</span> <span id="exe-status">Not tested</span> <button id="test-exe-button" class="test-exe-btn">Test</button></div>
+      <div><span class="info-label">SWGEmu.exe:</span> <span id="exe-status">Not tested</span> <button id="test-exe-button" class="test-exe-btn">Test</button></div>
     </div>
 
     <div class="progress-container">
@@ -487,7 +476,6 @@
 
   <script src="renderer.js"></script>
   <script>
-    // Animated hyperspace background (stars + warp effect)
     (function() {
       const canvas = document.getElementById('hyperspace-canvas');
       const ctx = canvas.getContext('2d');
