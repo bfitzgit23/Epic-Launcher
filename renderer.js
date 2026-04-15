@@ -1,4 +1,4 @@
-// renderer.js - SWG TFA Launcher (NGE / swg-source)
+// renderer.js - SWG Returns Launcher (Carbonite / SWGEmu.exe)
 const { ipcRenderer } = require('electron');
 const fs = require('fs');
 const path = require('path');
@@ -12,7 +12,6 @@ function getElement(id) {
 window.addEventListener('DOMContentLoaded', () => {
   console.log('[Renderer] DOM ready, initializing...');
 
-  // ---- DOM elements ----
   const closeButton = getElement('close-button');
   const minimizeButton = getElement('minimize-button');
   const maximizeButton = getElement('maximize-button');
@@ -57,7 +56,6 @@ window.addEventListener('DOMContentLoaded', () => {
   const cameraZoomSlider = getElement('camera-zoom-slider');
   const cameraZoomValue = getElement('camera-zoom-value');
 
-  // ---- State ----
   let isScanning = false;
   let isPaused = false;
   let installDir = null;
@@ -65,7 +63,6 @@ window.addEventListener('DOMContentLoaded', () => {
   let lastDownloadBytes = 0;
   let completedFiles = 0;
 
-  // ---- Helper functions ----
   function updateStatus(text) {
     if (statusElement) statusElement.textContent = text;
     console.log(`[Status] ${text}`);
@@ -99,7 +96,6 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // ---- Window controls ----
   async function refreshMaximizeIcon() {
     try {
       const isMax = await ipcRenderer.invoke('window:isMaximized');
@@ -116,7 +112,6 @@ window.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'F11') { e.preventDefault(); await ipcRenderer.invoke('window:toggleFullscreen'); }
   });
 
-  // ---- Settings modal ----
   function openSettingsModal() {
     if (modalOverlay && settingsModal) {
       modalOverlay.style.display = 'block';
@@ -205,7 +200,6 @@ window.addEventListener('DOMContentLoaded', () => {
   }
   if (saveSettingsButton) saveSettingsButton.addEventListener('click', saveSettings);
 
-  // ---- Slider live display updates ----
   if (zoomSlider && zoomValue) {
     zoomSlider.addEventListener('input', async (e) => {
       const val = parseInt(e.target.value, 10);
@@ -224,7 +218,6 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ---- Install directory ----
   async function showInstallLocationDialog() {
     try {
       const selectedDir = await ipcRenderer.invoke('select-directory');
@@ -240,10 +233,9 @@ window.addEventListener('DOMContentLoaded', () => {
   }
   if (installLocationButton) installLocationButton.addEventListener('click', showInstallLocationDialog);
 
-  // ---- EXE test (now uses SwgClient_r.exe) ----
   async function checkExeStatus() {
     if (!installDir) { if (exeStatusSpan) exeStatusSpan.textContent = 'No directory'; return; }
-    const exePath = path.join(installDir, 'SwgClient_r.exe');
+    const exePath = path.join(installDir, 'SWGEmu.exe');
     if (!fs.existsSync(exePath)) { if (exeStatusSpan) exeStatusSpan.textContent = 'Not found'; return; }
     const result = await ipcRenderer.invoke('test-exe', exePath);
     if (exeStatusSpan) exeStatusSpan.textContent = result.valid ? `Valid (${result.version || 'v?'})` : `Invalid: ${result.error}`;
@@ -251,8 +243,8 @@ window.addEventListener('DOMContentLoaded', () => {
   if (testExeButton) {
     testExeButton.addEventListener('click', async () => {
       if (!installDir) { updateStatus('Set install directory first'); return; }
-      const exePath = path.join(installDir, 'SwgClient_r.exe');
-      if (!fs.existsSync(exePath)) { updateStatus('SwgClient_r.exe not found'); return; }
+      const exePath = path.join(installDir, 'SWGEmu.exe');
+      if (!fs.existsSync(exePath)) { updateStatus('SWGEmu.exe not found'); return; }
       updateStatus('Testing EXE...');
       const result = await ipcRenderer.invoke('test-exe', exePath);
       if (result.valid) updateStatus(`EXE valid, version: ${result.version || 'unknown'}`);
@@ -261,7 +253,6 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ---- Play button (NGE version) ----
   if (playButton) {
     playButton.addEventListener('click', async () => {
       if (!installDir) {
@@ -269,9 +260,9 @@ window.addEventListener('DOMContentLoaded', () => {
         await showInstallLocationDialog();
         if (!installDir) return;
       }
-      let exePath = path.join(installDir, 'SwgClient_r.exe');
+      let exePath = path.join(installDir, 'SWGEmu.exe');
       if (!fs.existsSync(exePath)) {
-        updateStatus('SwgClient_r.exe not found. Please locate manually.');
+        updateStatus('SWGEmu.exe not found. Please locate manually.');
         const picked = await ipcRenderer.invoke('select-file');
         if (!picked) return;
         exePath = picked;
@@ -301,7 +292,7 @@ window.addEventListener('DOMContentLoaded', () => {
         
         const ram = settings.ram || 750;
         const result = await ipcRenderer.invoke('launch-game', { exePath, ram });
-        updateStatus(`SwgClient_r.exe launched successfully (PID: ${result.pid})`);
+        updateStatus(`SWGEmu.exe launched successfully (PID: ${result.pid})`);
       } catch (error) {
         updateStatus(`Launch failed: ${error.message}`);
         alert(`Failed to launch game:\n${error.message}\n\nCheck antivirus or file permissions.`);
@@ -309,7 +300,6 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ---- Core scan/repair function ----
   async function startScan(mode) {
     if (isScanning) return updateStatus('Scan already in progress');
     isScanning = true;
@@ -379,7 +369,6 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // ---- Button handlers ----
   if (quickScanButton) quickScanButton.addEventListener('click', () => {
     if (!installDir) { updateStatus('Set install location first'); showInstallLocationDialog(); return; }
     startScan('quick');
@@ -403,7 +392,6 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ---- Other buttons ----
   if (clearCacheButton) clearCacheButton.addEventListener('click', async () => {
     try {
       await ipcRenderer.invoke('clear-cache');
@@ -424,7 +412,6 @@ window.addEventListener('DOMContentLoaded', () => {
     updateStatus('Opening PayPal donation page...');
   });
 
-  // ---- Server status ----
   async function refreshServerStatus() {
     if (!serverStatusSpan) return;
     try {
@@ -444,7 +431,6 @@ window.addEventListener('DOMContentLoaded', () => {
   if (refreshServerBtn) refreshServerBtn.addEventListener('click', refreshServerStatus);
   setInterval(refreshServerStatus, 30000);
 
-  // ---- Game version ----
   async function checkGameVersion() {
     if (!gameVersionSpan) return;
     try {
@@ -465,7 +451,6 @@ window.addEventListener('DOMContentLoaded', () => {
   if (checkUpdatesBtn) checkUpdatesBtn.addEventListener('click', checkGameVersion);
   setInterval(checkGameVersion, 600000);
 
-  // ---- Auto-detect install directory ----
   async function autoDetectInstall() {
     const detected = await ipcRenderer.invoke('detect-install-dir');
     if (detected && !installDir) {
@@ -478,14 +463,12 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // ---- Launcher auto-updater events ----
   ipcRenderer.on('update-available', () => updateStatus('New launcher version available. Downloading...'));
   ipcRenderer.on('update-downloaded', () => {
     const restart = confirm('Update downloaded. Restart now to apply?');
     if (restart) ipcRenderer.invoke('restart-and-update');
   });
 
-  // ---- Initialization ----
   (async function init() {
     installDir = await ipcRenderer.invoke('get-install-dir');
     if (installDir) {
