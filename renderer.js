@@ -1,4 +1,4 @@
-// renderer.js - SWG Returns Launcher (Carbonite / SWGEmu.exe)
+// renderer.js - SWG Returns Launcher (PreCU / SWGEmu.exe)
 const { ipcRenderer } = require('electron');
 const fs = require('fs');
 const path = require('path');
