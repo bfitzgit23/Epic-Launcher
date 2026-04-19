@@ -1,4 +1,4 @@
-// main.js - SWG Returns Launcher (Carbonite / SWGEmu.exe)
+// main.js - SWG Returns Launcher (PreCU / SWGEmu.exe)
 const { app, BrowserWindow, ipcMain, dialog, shell, screen } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
@@ -22,7 +22,7 @@ app.commandLine.appendSwitch('force-device-scale-factor', '1');
 let mainWindow;
 let rpc;
 
-const BASE_URL = 'http://15.204.254.253/tre';
+const BASE_URL = 'http://15.204.254.253/tre/';
 const VERSION_URL = `${BASE_URL}version.txt`;
 const SERVER_IP = '15.204.254.253';
 const SERVER_PORT = 44453;
