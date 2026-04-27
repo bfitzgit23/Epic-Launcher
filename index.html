@@ -275,14 +275,7 @@
       color: #66ff66;
     }
 
-    .modal-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.8);
-      z-index: 1000;
-      display: none;
-      -webkit-app-region: no-drag;
-    }
+    /* Modal – scrollable */
     .settings-modal {
       position: fixed;
       top: 50%;
@@ -294,10 +287,13 @@
       padding: 20px;
       z-index: 1001;
       width: 90%;
-      max-width: 420px;
+      max-width: 500px;
+      max-height: 85vh;
       display: none;
+      flex-direction: column;
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
       -webkit-app-region: no-drag;
+      overflow-y: auto;
     }
     .settings-header {
       display: flex;
@@ -322,8 +318,19 @@
       font-size: 18px;
       cursor: pointer;
     }
+    .setting-group {
+      margin-bottom: 20px;
+      border-bottom: 1px solid rgba(102,102,102,0.3);
+      padding-bottom: 15px;
+    }
+    .setting-group h3 {
+      color: var(--gold);
+      font-size: 16px;
+      margin-bottom: 10px;
+      font-family: 'Orbitron', sans-serif;
+    }
     .setting-item {
-      margin-bottom: 15px;
+      margin-bottom: 12px;
       padding: 8px;
       background: rgba(0,0,0,0.3);
       border-radius: 8px;
@@ -335,7 +342,7 @@
       font-size: 13px;
       font-family: 'Orbitron', sans-serif;
     }
-    .setting-select {
+    .setting-select, .setting-input {
       width: 100%;
       padding: 8px;
       border-radius: 6px;
@@ -344,15 +351,16 @@
       color: white;
     }
     .setting-item label {
-      display: block;
+      display: inline-block;
       color: #ddd;
       font-size: 13px;
       cursor: pointer;
-      margin: 4px 0;
+      margin: 4px 8px 4px 0;
     }
     .setting-checkbox {
-      margin-right: 8px;
+      margin-right: 6px;
       accent-color: var(--green);
+      vertical-align: middle;
     }
     input[type="range"] {
       width: 100%;
@@ -370,17 +378,14 @@
       background: var(--green);
       cursor: pointer;
     }
-
-    @media (max-width: 800px) {
-      .side-buttons { width: 32vw; min-width: 140px; right: 2%; }
-      .play-button { left: 3%; width: 90px; height: 90px; font-size: 16px; }
-      .info-panels { bottom: 10px; left: 10px; padding: 6px 10px; max-width: 240px; }
-      .info-label { width: 70px; }
+    .setting-hint {
+      font-size: 11px;
+      color: #aaa;
+      margin-top: 4px;
     }
-    @media (max-width: 600px) {
-      .side-buttons { width: 40vw; gap: 8px; }
-      .play-button { width: 70px; height: 70px; font-size: 14px; }
-      .progress-container { width: 90%; padding: 10px; }
+    button.side-button {
+      margin-top: 15px;
+      width: 100%;
     }
   </style>
 </head>
@@ -395,42 +400,143 @@
       <div class="settings-title">SETTINGS</div>
       <button class="settings-close" id="settings-close">×</button>
     </div>
-    <div class="setting-item">
-      <label class="setting-label">Scan Mode</label>
-      <select class="setting-select" id="scan-mode-select">
-        <option value="quick">Quick Scan</option>
-        <option value="full">Full Scan</option>
-      </select>
+
+    <!-- Game Settings -->
+    <div class="setting-group">
+      <h3>🎮 Game Settings</h3>
+      <div class="setting-item">
+        <label class="setting-label">Resolution</label>
+        <select id="resolution-select" class="setting-select">
+          <option value="800x600">800 x 600</option>
+          <option value="1024x768">1024 x 768</option>
+          <option value="1280x720">1280 x 720 (720p)</option>
+          <option value="1920x1080" selected>1920 x 1080 (1080p)</option>
+          <option value="2560x1440">2560 x 1440 (1440p)</option>
+          <option value="3840x2160">3840 x 2160 (4K)</option>
+        </select>
+      </div>
+      <div class="setting-item">
+        <label class="setting-label">Display Mode</label>
+        <select id="display-mode-select" class="setting-select">
+          <option value="fullscreen">Fullscreen</option>
+          <option value="windowed">Windowed</option>
+          <option value="borderless">Borderless</option>
+        </select>
+      </div>
+      <div class="setting-item">
+        <label class="setting-label">FPS Limit</label>
+        <select id="fps-limit-select" class="setting-select">
+          <option value="30">30</option>
+          <option value="45">45</option>
+          <option value="60" selected>60</option>
+          <option value="120">120</option>
+        </select>
+      </div>
+      <div class="setting-item">
+        <label class="setting-label">Shader Quality</label>
+        <select id="shader-quality-select" class="setting-select">
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+          <option value="off">Off (Safe Mode)</option>
+        </select>
+      </div>
+      <div class="setting-item">
+        <label class="setting-label">Cache Size</label>
+        <select id="cache-size-select" class="setting-select">
+          <option value="small">Small</option>
+          <option value="medium">Medium</option>
+          <option value="large" selected>Large</option>
+        </select>
+      </div>
+      <div class="setting-item">
+        <label><input type="checkbox" id="sound-checkbox" class="setting-checkbox"> Sound Enabled</label><br>
+        <label><input type="checkbox" id="hardware-cursor-checkbox" class="setting-checkbox"> Hardware Mouse Cursor</label><br>
+        <label><input type="checkbox" id="skip-intro-checkbox" class="setting-checkbox"> Skip Intro Video</label><br>
+        <label><input type="checkbox" id="texture-baking-checkbox" class="setting-checkbox"> Texture Baking</label><br>
+        <label><input type="checkbox" id="dot3-terrain-checkbox" class="setting-checkbox"> DOT3 Terrain</label>
+      </div>
     </div>
-    <div class="setting-item">
-      <label><input type="checkbox" class="setting-checkbox" id="auto-launch-checkbox"> Auto-launch after scan</label>
+
+    <!-- Renderer & Memory -->
+    <div class="setting-group">
+      <h3>⚙️ Renderer & Memory</h3>
+      <div class="setting-item">
+        <label class="setting-label">Renderer</label>
+        <select id="renderer-select" class="setting-select">
+          <option value="directx">DirectX</option>
+          <option value="vulkan">Vulkan (experimental)</option>
+        </select>
+        <div class="setting-hint">Vulkan uses DX9K to translate DirectX 9 calls — may improve performance on modern GPUs</div>
+      </div>
+      <div class="setting-item">
+        <label class="setting-label">Memory Allocation (MB)</label>
+        <input type="range" id="memory-slider" min="512" max="8192" step="256" value="4096">
+        <span id="memory-value" style="color: var(--gold); display: inline-block; margin-top: 4px;">4096 MB</span>
+        <div class="setting-hint">Sets the SWGCLIENT_MEMORY_SIZE_MB environment variable</div>
+      </div>
     </div>
-    <div class="setting-item">
-      <label><input type="checkbox" class="setting-checkbox" id="auto-update-checkbox"> Auto-update launcher</label>
+
+    <!-- Camera & Multi-instance -->
+    <div class="setting-group">
+      <h3>🎥 Camera & Multi‑instance</h3>
+      <div class="setting-item">
+        <label class="setting-label">Max Camera Zoom</label>
+        <input type="range" id="camera-zoom-slider" min="1" max="20" step="1" value="10">
+        <span id="camera-zoom-value" style="color: var(--gold); display: inline-block; margin-top: 4px;">10</span>
+        <div class="setting-hint">Maximum free‑chase camera zoom distance</div>
+      </div>
+      <div class="setting-item">
+        <label><input type="checkbox" id="allow-multiple-instances-checkbox" class="setting-checkbox"> Allow Multiple Instances</label>
+        <div class="setting-hint">Run multiple game clients simultaneously</div>
+      </div>
     </div>
-    <div class="setting-item">
-      <label><input type="checkbox" class="setting-checkbox" id="minimize-to-tray-checkbox"> Minimize to system tray</label>
+
+    <!-- Downloads -->
+    <div class="setting-group">
+      <h3>⬇️ Downloads</h3>
+      <div class="setting-item">
+        <label class="setting-label">Concurrent Downloads</label>
+        <select id="concurrent-downloads-select" class="setting-select">
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4" selected>4</option>
+          <option value="6">6</option>
+          <option value="8">8</option>
+        </select>
+      </div>
+      <div class="setting-item">
+        <label class="setting-label">Speed Limit (MB/s, 0 = unlimited)</label>
+        <input type="number" id="speed-limit-input" class="setting-input" min="0" max="100" step="1" value="0">
+      </div>
     </div>
-    <div class="setting-item">
-      <label class="setting-label">Connection Timeout (seconds)</label>
-      <input type="number" class="setting-select" id="timeout-input" min="10" max="120" value="30">
+
+    <!-- Launch Options -->
+    <div class="setting-group">
+      <h3>🚀 Launch Options</h3>
+      <div class="setting-item">
+        <label class="setting-label">Additional Launch Arguments</label>
+        <input type="text" id="additional-args-input" class="setting-input" placeholder="-s Station fps=60">
+        <div class="setting-hint">e.g. -s Station fps=60</div>
+      </div>
+      <div class="setting-item">
+        <label><input type="checkbox" id="safe-mode-checkbox" class="setting-checkbox"> Safe Mode</label>
+        <div class="setting-hint">Launch with minimal settings for troubleshooting</div>
+      </div>
     </div>
-    <div class="setting-item">
-      <label class="setting-label">Max In‑Game FPS</label>
-      <input type="range" id="max-fps-slider" min="30" max="144" step="1" value="60">
-      <span id="max-fps-value" style="color: var(--gold); display: inline-block; margin-top: 4px;">60 FPS</span>
+
+    <!-- Privacy -->
+    <div class="setting-group">
+      <h3>🔒 Privacy</h3>
+      <div class="setting-item">
+        <label><input type="checkbox" id="share-usage-checkbox" class="setting-checkbox"> Share usage data</label>
+        <div class="setting-hint">Help improve the launcher by sharing anonymous usage statistics and error reports</div>
+      </div>
     </div>
-    <div class="setting-item">
-      <label class="setting-label">Max Camera Zoom</label>
-      <input type="range" id="camera-zoom-slider" min="1" max="20" step="1" value="10">
-      <span id="camera-zoom-value" style="color: var(--gold); display: inline-block; margin-top: 4px;">10</span>
-    </div>
-    <div class="setting-item">
-      <label class="setting-label">UI Zoom (%)</label>
-      <input type="range" id="zoom-slider" min="50" max="150" step="5" value="100">
-      <span id="zoom-value" style="color: var(--gold); display: inline-block; margin-top: 4px;">100%</span>
-    </div>
-    <button class="side-button" id="save-settings" style="margin-top: 15px; width: 100%;">SAVE SETTINGS</button>
+
+    <button class="side-button" id="save-settings">SAVE CLIENT OPTIONS</button>
+    <div class="setting-hint" style="margin-top: 10px;">These settings are written to options.cfg in your game install directory. Changes take effect on next game launch.</div>
   </div>
 
   <div class="main-content">
