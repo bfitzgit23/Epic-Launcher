@@ -1,4 +1,4 @@
-// renderer.js - SWG Returns Launcher (PreCU / SWGEmu.exe)
+// renderer.js - SWG Returns Launcher (PreCU) with all new settings
 const { ipcRenderer } = require('electron');
 const fs = require('fs');
 const path = require('path');
@@ -12,6 +12,7 @@ function getElement(id) {
 window.addEventListener('DOMContentLoaded', () => {
   console.log('[Renderer] DOM ready, initializing...');
 
+  // Existing elements
   const closeButton = getElement('close-button');
   const minimizeButton = getElement('minimize-button');
   const maximizeButton = getElement('maximize-button');
@@ -43,19 +44,41 @@ window.addEventListener('DOMContentLoaded', () => {
   const modalOverlay = getElement('modal-overlay');
   const settingsModal = getElement('settings-modal');
   const settingsCloseButton = getElement('settings-close');
+  const saveSettingsButton = getElement('save-settings');
+
+  // New settings elements
+  const resolutionSelect = getElement('resolution-select');
+  const displayModeSelect = getElement('display-mode-select');
+  const fpsLimitSelect = getElement('fps-limit-select');
+  const shaderQualitySelect = getElement('shader-quality-select');
+  const cacheSizeSelect = getElement('cache-size-select');
+  const soundCheckbox = getElement('sound-checkbox');
+  const hardwareCursorCheckbox = getElement('hardware-cursor-checkbox');
+  const skipIntroCheckbox = getElement('skip-intro-checkbox');
+  const textureBakingCheckbox = getElement('texture-baking-checkbox');
+  const dot3TerrainCheckbox = getElement('dot3-terrain-checkbox');
+  const rendererSelect = getElement('renderer-select');
+  const memorySlider = getElement('memory-slider');
+  const memoryValue = getElement('memory-value');
+  const cameraZoomSlider = getElement('camera-zoom-slider');
+  const cameraZoomValue = getElement('camera-zoom-value');
+  const allowMultipleInstancesCheckbox = getElement('allow-multiple-instances-checkbox');
+  const concurrentDownloadsSelect = getElement('concurrent-downloads-select');
+  const speedLimitInput = getElement('speed-limit-input');
+  const additionalArgsInput = getElement('additional-args-input');
+  const safeModeCheckbox = getElement('safe-mode-checkbox');
+  const shareUsageCheckbox = getElement('share-usage-checkbox');
+
+  // Legacy elements (preserve backward compatibility)
   const scanModeSelect = getElement('scan-mode-select');
   const autoLaunchCheckbox = getElement('auto-launch-checkbox');
   const autoUpdateCheckbox = getElement('auto-update-checkbox');
   const minimizeToTrayCheckbox = getElement('minimize-to-tray-checkbox');
   const timeoutInput = getElement('timeout-input');
-  const saveSettingsButton = getElement('save-settings');
   const zoomSlider = getElement('zoom-slider');
   const zoomValue = getElement('zoom-value');
-  const maxFpsSlider = getElement('max-fps-slider');
-  const maxFpsValue = getElement('max-fps-value');
-  const cameraZoomSlider = getElement('camera-zoom-slider');
-  const cameraZoomValue = getElement('camera-zoom-value');
 
+  // State
   let isScanning = false;
   let isPaused = false;
   let installDir = null;
@@ -115,7 +138,7 @@ window.addEventListener('DOMContentLoaded', () => {
   function openSettingsModal() {
     if (modalOverlay && settingsModal) {
       modalOverlay.style.display = 'block';
-      settingsModal.style.display = 'block';
+      settingsModal.style.display = 'flex';
       loadSettings();
     }
   }
@@ -130,86 +153,111 @@ window.addEventListener('DOMContentLoaded', () => {
   if (modalOverlay) modalOverlay.addEventListener('click', closeSettingsModal);
   if (settingsModal) settingsModal.addEventListener('click', (e) => e.stopPropagation());
 
-  async function loadGameConfig() {
-    if (!installDir) return;
-    try {
-      const gameConfig = await ipcRenderer.invoke('get-game-config', installDir);
-      if (gameConfig) {
-        if (cameraZoomSlider && cameraZoomValue) {
-          cameraZoomSlider.value = gameConfig.maxCameraZoom || 10;
-          cameraZoomValue.textContent = cameraZoomSlider.value;
-        }
-      }
-      const settings = await ipcRenderer.invoke('get-settings');
-      if (maxFpsSlider && maxFpsValue) {
-        const savedFps = settings.maxFps || 60;
-        maxFpsSlider.value = savedFps;
-        maxFpsValue.textContent = `${savedFps} FPS`;
-      }
-    } catch (err) { console.warn('Could not load game config:', err); }
-  }
-
   async function loadSettings() {
     try {
-      const scanMode = await ipcRenderer.invoke('get-scan-mode');
-      if (scanModeSelect) scanModeSelect.value = scanMode || 'quick';
       const settings = await ipcRenderer.invoke('get-settings');
-      if (settings) {
-        if (autoLaunchCheckbox) autoLaunchCheckbox.checked = settings.autoLaunch || false;
-        if (autoUpdateCheckbox) autoUpdateCheckbox.checked = settings.autoUpdate || false;
-        if (minimizeToTrayCheckbox) minimizeToTrayCheckbox.checked = settings.minimizeToTray || false;
-        if (timeoutInput) timeoutInput.value = settings.timeout || 30;
-        if (zoomSlider && zoomValue) {
-          const savedZoom = settings.zoom || 100;
-          zoomSlider.value = savedZoom;
-          zoomValue.textContent = `${savedZoom}%`;
-        }
-        if (maxFpsSlider && maxFpsValue) {
-          const savedFps = settings.maxFps || 60;
-          maxFpsSlider.value = savedFps;
-          maxFpsValue.textContent = `${savedFps} FPS`;
-        }
+      if (!settings) return;
+
+      // Game settings
+      if (resolutionSelect) resolutionSelect.value = settings.resolution || '1920x1080';
+      if (displayModeSelect) displayModeSelect.value = settings.displayMode || 'fullscreen';
+      if (fpsLimitSelect) fpsLimitSelect.value = settings.fpsLimit || '60';
+      if (shaderQualitySelect) shaderQualitySelect.value = settings.shaderQuality || 'high';
+      if (cacheSizeSelect) cacheSizeSelect.value = settings.cacheSize || 'large';
+      if (soundCheckbox) soundCheckbox.checked = settings.soundEnabled !== false;
+      if (hardwareCursorCheckbox) hardwareCursorCheckbox.checked = settings.hardwareCursor || false;
+      if (skipIntroCheckbox) skipIntroCheckbox.checked = settings.skipIntro || false;
+      if (textureBakingCheckbox) textureBakingCheckbox.checked = settings.textureBaking || false;
+      if (dot3TerrainCheckbox) dot3TerrainCheckbox.checked = settings.dot3Terrain || false;
+      if (rendererSelect) rendererSelect.value = settings.renderer || 'directx';
+      if (memorySlider && memoryValue) {
+        const mem = settings.memoryMB || 4096;
+        memorySlider.value = mem;
+        memoryValue.textContent = `${mem} MB`;
       }
-      await loadGameConfig();
+      if (cameraZoomSlider && cameraZoomValue) {
+        const zoom = settings.maxCameraZoom || 10;
+        cameraZoomSlider.value = zoom;
+        cameraZoomValue.textContent = zoom;
+      }
+      if (allowMultipleInstancesCheckbox) allowMultipleInstancesCheckbox.checked = settings.allowMultipleInstances || false;
+      if (concurrentDownloadsSelect) concurrentDownloadsSelect.value = settings.concurrentDownloads || 4;
+      if (speedLimitInput) speedLimitInput.value = settings.speedLimitMBps || 0;
+      if (additionalArgsInput) additionalArgsInput.value = settings.additionalArgs || '';
+      if (safeModeCheckbox) safeModeCheckbox.checked = settings.safeMode || false;
+      if (shareUsageCheckbox) shareUsageCheckbox.checked = settings.shareUsage || false;
+
+      // Legacy settings
+      if (scanModeSelect) scanModeSelect.value = settings.scanMode || 'quick';
+      if (autoLaunchCheckbox) autoLaunchCheckbox.checked = settings.autoLaunch || false;
+      if (autoUpdateCheckbox) autoUpdateCheckbox.checked = settings.autoUpdate || false;
+      if (minimizeToTrayCheckbox) minimizeToTrayCheckbox.checked = settings.minimizeToTray || false;
+      if (timeoutInput) timeoutInput.value = settings.timeout || 30;
+      if (zoomSlider && zoomValue) {
+        const savedZoom = settings.zoom || 100;
+        zoomSlider.value = savedZoom;
+        zoomValue.textContent = `${savedZoom}%`;
+        await ipcRenderer.invoke('set-zoom', savedZoom);
+      }
     } catch (error) { console.error('Failed to load settings:', error); }
   }
 
   async function saveSettings() {
     try {
+      // Gather all settings
       const settings = {
+        // Game
+        resolution: resolutionSelect ? resolutionSelect.value : '1920x1080',
+        displayMode: displayModeSelect ? displayModeSelect.value : 'fullscreen',
+        fpsLimit: fpsLimitSelect ? parseInt(fpsLimitSelect.value, 10) : 60,
+        shaderQuality: shaderQualitySelect ? shaderQualitySelect.value : 'high',
+        cacheSize: cacheSizeSelect ? cacheSizeSelect.value : 'large',
+        soundEnabled: soundCheckbox ? soundCheckbox.checked : true,
+        hardwareCursor: hardwareCursorCheckbox ? hardwareCursorCheckbox.checked : false,
+        skipIntro: skipIntroCheckbox ? skipIntroCheckbox.checked : false,
+        textureBaking: textureBakingCheckbox ? textureBakingCheckbox.checked : false,
+        dot3Terrain: dot3TerrainCheckbox ? dot3TerrainCheckbox.checked : false,
+        renderer: rendererSelect ? rendererSelect.value : 'directx',
+        memoryMB: memorySlider ? parseInt(memorySlider.value, 10) : 4096,
+        maxCameraZoom: cameraZoomSlider ? parseInt(cameraZoomSlider.value, 10) : 10,
+        allowMultipleInstances: allowMultipleInstancesCheckbox ? allowMultipleInstancesCheckbox.checked : false,
+        concurrentDownloads: concurrentDownloadsSelect ? parseInt(concurrentDownloadsSelect.value, 10) : 4,
+        speedLimitMBps: speedLimitInput ? parseFloat(speedLimitInput.value) || 0 : 0,
+        additionalArgs: additionalArgsInput ? additionalArgsInput.value : '',
+        safeMode: safeModeCheckbox ? safeModeCheckbox.checked : false,
+        shareUsage: shareUsageCheckbox ? shareUsageCheckbox.checked : false,
+        // Legacy
         scanMode: scanModeSelect ? scanModeSelect.value : 'quick',
         autoLaunch: autoLaunchCheckbox ? autoLaunchCheckbox.checked : false,
         autoUpdate: autoUpdateCheckbox ? autoUpdateCheckbox.checked : false,
         minimizeToTray: minimizeToTrayCheckbox ? minimizeToTrayCheckbox.checked : false,
         timeout: timeoutInput ? parseInt(timeoutInput.value, 10) || 30 : 30,
-        zoom: zoomSlider ? parseInt(zoomSlider.value, 10) : 100,
-        maxFps: maxFpsSlider ? parseInt(maxFpsSlider.value, 10) : 60
+        zoom: zoomSlider ? parseInt(zoomSlider.value, 10) : 100
       };
+
+      // Save to launcher settings
       await ipcRenderer.invoke('save-settings', settings);
-      
+
+      // Write options.cfg if install directory exists
       if (installDir) {
-        const gameConfig = {
-          maxCameraZoom: cameraZoomSlider ? parseInt(cameraZoomSlider.value, 10) : 10
-        };
-        await ipcRenderer.invoke('save-game-config', installDir, gameConfig);
+        await ipcRenderer.invoke('write-game-options', installDir, settings);
       }
+
+      // If FPS limit changed and game is not running, we can optionally patch the exe later at launch time
+      // (handled in play button)
       
       updateStatus('Settings saved successfully');
       closeSettingsModal();
-    } catch (error) { updateStatus(`Failed to save settings: ${error.message}`); }
+    } catch (error) {
+      updateStatus(`Failed to save settings: ${error.message}`);
+    }
   }
   if (saveSettingsButton) saveSettingsButton.addEventListener('click', saveSettings);
 
-  if (zoomSlider && zoomValue) {
-    zoomSlider.addEventListener('input', async (e) => {
-      const val = parseInt(e.target.value, 10);
-      zoomValue.textContent = `${val}%`;
-      await ipcRenderer.invoke('set-zoom', val);
-    });
-  }
-  if (maxFpsSlider && maxFpsValue) {
-    maxFpsSlider.addEventListener('input', (e) => {
-      maxFpsValue.textContent = `${e.target.value} FPS`;
+  // Live display updates
+  if (memorySlider && memoryValue) {
+    memorySlider.addEventListener('input', (e) => {
+      memoryValue.textContent = `${e.target.value} MB`;
     });
   }
   if (cameraZoomSlider && cameraZoomValue) {
@@ -217,7 +265,15 @@ window.addEventListener('DOMContentLoaded', () => {
       cameraZoomValue.textContent = e.target.value;
     });
   }
+  if (zoomSlider && zoomValue) {
+    zoomSlider.addEventListener('input', async (e) => {
+      const val = parseInt(e.target.value, 10);
+      zoomValue.textContent = `${val}%`;
+      await ipcRenderer.invoke('set-zoom', val);
+    });
+  }
 
+  // Install directory dialog
   async function showInstallLocationDialog() {
     try {
       const selectedDir = await ipcRenderer.invoke('select-directory');
@@ -227,7 +283,6 @@ window.addEventListener('DOMContentLoaded', () => {
         await ipcRenderer.invoke('save-install-dir', installDir);
         updateStatus(`Install directory set: ${installDir}`);
         checkExeStatus();
-        await loadGameConfig();
       }
     } catch (error) { updateStatus(`Error selecting directory: ${error.message}`); }
   }
@@ -253,6 +308,7 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Play button – launch with all gathered settings
   if (playButton) {
     playButton.addEventListener('click', async () => {
       if (!installDir) {
@@ -273,7 +329,7 @@ window.addEventListener('DOMContentLoaded', () => {
       
       try {
         const settings = await ipcRenderer.invoke('get-settings');
-        const desiredFps = settings.maxFps || 60;
+        const desiredFps = settings.fpsLimit || 60;
         updateStatus(`Setting max FPS to ${desiredFps}...`);
         const patchResult = await ipcRenderer.invoke('patch-game-fps', exePath, desiredFps);
         if (!patchResult.success) {
@@ -282,16 +338,14 @@ window.addEventListener('DOMContentLoaded', () => {
           updateStatus(`FPS patched to ${desiredFps}`);
         }
         
-        const serverInfo = await ipcRenderer.invoke('get-server-info');
-        const gameConfig = await ipcRenderer.invoke('get-game-config', installDir);
-        const zoom = gameConfig.maxCameraZoom || 10;
-        const loginCfg = `[ClientGame]\r\nloginServerAddress0=${serverInfo.ip}\r\nloginServerPort0=${serverInfo.port}\r\nfreeChaseCameraMaximumZoom=${zoom}\r\n0fd345d9 = true\r\n`;
-        const loginCfgPath = path.join(installDir, 'swgemu_login.cfg');
-        fs.writeFileSync(loginCfgPath, loginCfg, 'utf8');
-        updateStatus('Login configuration written');
+        // Write options.cfg again to ensure latest game settings
+        await ipcRenderer.invoke('write-game-options', installDir, settings);
         
-        const ram = settings.ram || 750;
-        const result = await ipcRenderer.invoke('launch-game', { exePath, ram });
+        // Launch with all options
+        const result = await ipcRenderer.invoke('launch-game', { 
+          exePath, 
+          settings 
+        });
         updateStatus(`SWGEmu.exe launched successfully (PID: ${result.pid})`);
       } catch (error) {
         updateStatus(`Launch failed: ${error.message}`);
@@ -300,6 +354,7 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // --- Patcher (unchanged, uses BASE_URL from main.js) ---
   async function startScan(mode) {
     if (isScanning) return updateStatus('Scan already in progress');
     isScanning = true;
@@ -392,6 +447,7 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Other buttons
   if (clearCacheButton) clearCacheButton.addEventListener('click', async () => {
     try {
       await ipcRenderer.invoke('clear-cache');
@@ -412,6 +468,7 @@ window.addEventListener('DOMContentLoaded', () => {
     updateStatus('Opening PayPal donation page...');
   });
 
+  // Server status & game version (unchanged)
   async function refreshServerStatus() {
     if (!serverStatusSpan) return;
     try {
@@ -459,7 +516,6 @@ window.addEventListener('DOMContentLoaded', () => {
       await ipcRenderer.invoke('save-install-dir', installDir);
       updateStatus(`Auto-detected install directory: ${installDir}`);
       checkExeStatus();
-      await loadGameConfig();
     }
   }
 
@@ -475,7 +531,6 @@ window.addEventListener('DOMContentLoaded', () => {
       if (currentDirectoryElement) currentDirectoryElement.textContent = installDir;
       updateStatus(`Install directory: ${installDir}`);
       checkExeStatus();
-      await loadGameConfig();
     } else {
       if (currentDirectoryElement) currentDirectoryElement.textContent = 'No install directory set';
       updateStatus('Please set an install location');
