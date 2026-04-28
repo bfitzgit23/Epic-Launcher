@@ -1,11 +1,11 @@
-// main.js - SWG Returns Launcher (PreCU) with proper INI format preservation
+// main.js - SWG Returns Launcher (PreCU/Core3)
 const { app, BrowserWindow, ipcMain, dialog, shell, screen } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
 const crypto = require('crypto');
-const { execFile, spawn } = require('child_process');
+const { spawn } = require('child_process');
 const axios = require('axios');
 
 let DiscordRPC;
@@ -260,26 +260,19 @@ ipcMain.handle('write-game-options', async (event, installDir, settings) => {
     const updatedSettings = {
       screenWidth: parseInt(settings.resolution?.split('x')[0]) || 1920,
       screenHeight: parseInt(settings.resolution?.split('x')[1]) || 1080,
-      fullscreen: settings.displayMode === 'fullscreen' ? '1' : '0',
-      borderless: settings.displayMode === 'borderless' ? '1' : '0',
-      windowed: settings.displayMode === 'windowed' ? '1' : '0',
-      maxFramesPerSecond: settings.fpsLimit || 60,
-      shaderQuality: settings.shaderQuality === 'off' ? '0' : (settings.shaderQuality === 'low' ? '1' : (settings.shaderQuality === 'medium' ? '2' : '3')),
-      cache: settings.cacheSize === 'small' ? 'misc/cache_small.iff' : (settings.cacheSize === 'medium' ? 'misc/cache_medium.iff' : 'misc/cache_large.iff'),
-      soundEnabled: settings.soundEnabled ? '1' : '0',
-      useHardwareMouseCursor: settings.hardwareCursor ? '1' : '0',
-      skipIntro: settings.skipIntro ? '1' : '0',
-      textureBaking: settings.textureBaking ? '1' : '0',
-      dot3Terrain: settings.dot3Terrain ? '1' : '0',
-      renderer: settings.renderer === 'vulkan' ? 'vulkan' : 'directx',
+      fullscreen: settings.displayMode === 'fullscreen' ? 1 : 0,
+      borderlessWindow: settings.displayMode === 'borderless' ? 1 : 0,
+      windowed: settings.displayMode === 'windowed' ? 1 : 0,
+      useHardwareMouseCursor: settings.hardwareCursor ? 1 : 0,
+      skipIntro: settings.skipIntro ? 1 : 0,
+      textureBaking: settings.textureBaking ? 1 : 0,
+      dot3Terrain: settings.dot3Terrain ? 1 : 0,
       maxCameraZoom: settings.maxCameraZoom || 10,
-      safeMode: settings.safeMode ? '1' : '0'
+      cache: settings.cacheSize === 'small' ? 'misc/cache_small.iff' : (settings.cacheSize === 'medium' ? 'misc/cache_medium.iff' : 'misc/cache_large.iff'),
     };
     
     const newLines = [];
     let inClientGraphics = false;
-    let inClientAudio = false;
-    let inDirect3d9 = false;
     let inSharedUtility = false;
     let updatedKeys = new Set();
     
@@ -290,28 +283,12 @@ ipcMain.handle('write-game-options', async (event, installDir, settings) => {
       // Track which section we're in
       if (line.match(/^\[ClientGraphics\]/)) {
         inClientGraphics = true;
-        inClientAudio = false;
-        inDirect3d9 = false;
-        inSharedUtility = false;
-      } else if (line.match(/^\[ClientAudio\]/)) {
-        inClientGraphics = false;
-        inClientAudio = true;
-        inDirect3d9 = false;
-        inSharedUtility = false;
-      } else if (line.match(/^\[Direct3d9\]/)) {
-        inClientGraphics = false;
-        inClientAudio = false;
-        inDirect3d9 = true;
         inSharedUtility = false;
       } else if (line.match(/^\[SharedUtility\]/)) {
         inClientGraphics = false;
-        inClientAudio = false;
-        inDirect3d9 = false;
         inSharedUtility = true;
       } else if (line.match(/^\[/)) {
         inClientGraphics = false;
-        inClientAudio = false;
-        inDirect3d9 = false;
         inSharedUtility = false;
       }
       
@@ -346,7 +323,6 @@ ipcMain.handle('write-game-options', async (event, installDir, settings) => {
     // Add missing settings to ClientGraphics section if they don't exist
     const missingKeys = Object.keys(updatedSettings).filter(k => !updatedKeys.has(k) && k !== 'cache');
     if (missingKeys.length > 0) {
-      // Find where ClientGraphics section ends
       let clientGraphicsIndex = -1;
       let insertIndex = -1;
       for (let i = 0; i < newLines.length; i++) {
@@ -376,7 +352,7 @@ ipcMain.handle('write-game-options', async (event, installDir, settings) => {
     const newContent = newLines.join('\n');
     fs.writeFileSync(optionsPath, newContent, 'utf8');
     
-    log(`Updated options.cfg in ${installDir} (preserved INI format and all non-managed settings)`);
+    log(`Updated options.cfg in ${installDir} (preserved INI format)`);
     return { success: true };
   } catch (err) {
     log(`Error writing options.cfg: ${err.message}`, 'ERROR');
@@ -384,7 +360,7 @@ ipcMain.handle('write-game-options', async (event, installDir, settings) => {
   }
 });
 
-// FPS patching
+// FPS patching for PreCU
 ipcMain.handle('patch-game-fps', async (event, exePath, fps) => {
   return new Promise(resolve => {
     if (!fs.existsSync(exePath)) {
@@ -433,7 +409,7 @@ ipcMain.handle('test-exe', async (event, exePath) => {
   }
 });
 
-// Launch game with full settings
+// Launch game for PreCU (Core3) - Simplified - NO COMPLEX ARGUMENTS
 ipcMain.handle('launch-game', async (event, { exePath, settings }) => {
   return new Promise((resolve, reject) => {
     if (!fs.existsSync(exePath)) {
@@ -441,53 +417,29 @@ ipcMain.handle('launch-game', async (event, { exePath, settings }) => {
       return;
     }
     const exeDir = path.dirname(exePath);
-    let args = [
-      '--',
-      '-s',
-      'ClientGame',
-      `loginServerAddress0=${SERVER_IP}`,
-      `loginServerPort0=${SERVER_PORT}`,
-      '-s',
-      'Station',
-      'gameFeatures=34929',
-    ];
-    if (settings.allowMultipleInstances) {
-      args.push('-s', 'SwgClient', 'allowMultipleInstances=true');
-    }
-    if (settings.displayMode === 'windowed') {
-      args.push('-w');
-    } else if (settings.displayMode === 'borderless') {
-      args.push('-borderless');
-    }
-    const [w, h] = (settings.resolution || '1920x1080').split('x');
-    args.push(`-r ${w} ${h}`);
-    if (settings.additionalArgs) {
-      const extra = settings.additionalArgs.split(/\s+/);
-      args.push(...extra);
-    }
-    if (settings.safeMode) {
-      args.push('-safemode');
-    }
-    const env = Object.create(process.env);
-    env.SWGCLIENT_MEMORY_SIZE_MB = settings.memoryMB || 4096;
-    log(
-      `Launching ${exePath} with args: ${args.join(' ')}, memory: ${env.SWGCLIENT_MEMORY_SIZE_MB} MB`,
-    );
-    const gameProcess = spawn(exePath, args, {
+    
+    // PreCU doesn't need complex command line arguments
+    // Just launch the executable directly
+    log(`Launching PreCU SWGEmu.exe from: ${exePath}`);
+    
+    const gameProcess = spawn(exePath, [], {
       cwd: exeDir,
-      env: env,
       detached: true,
       stdio: 'ignore',
-      windowsHide: false,
+      windowsHide: false
     });
-    gameProcess.on('error', err => {
-      log(`Spawn error: ${err.message}`, 'ERROR');
+    
+    gameProcess.on('error', (err) => {
+      log(`Launch error: ${err.message}`, 'ERROR');
       reject(err);
     });
-    gameProcess.on('exit', code => {
+    
+    gameProcess.on('exit', (code) => {
       log(`Game process exited with code ${code}`);
     });
+    
     gameProcess.unref();
+    
     if (gameProcess.pid) {
       updateDiscordStatus('playing', 'Playing Star Wars Galaxies');
       log(`Game launched with PID: ${gameProcess.pid}`);
