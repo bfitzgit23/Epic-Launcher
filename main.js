@@ -1,4 +1,4 @@
-// main.js - SWG Returns Launcher (PreCU) with full game options & manual update check
+// main.js - SWG Returns Launcher (PreCU) with options.cfg preservation
 const { app, BrowserWindow, ipcMain, dialog, shell, screen } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
@@ -225,21 +225,29 @@ ipcMain.handle('save-game-version', (event, version) => {
   fs.writeFileSync(path.join(app.getPath('userData'), 'game_version.txt'), version);
 });
 
-// Write options.cfg from settings
+// Write options.cfg from settings - PRESERVES existing options
 ipcMain.handle('write-game-options', async (event, installDir, settings) => {
   const optionsPath = path.join(installDir, 'options.cfg');
   try {
+    // Read existing config (if any)
     let existingConfig = {};
     if (fs.existsSync(optionsPath)) {
       const content = fs.readFileSync(optionsPath, 'utf8');
       const lines = content.split(/\r?\n/);
       for (const line of lines) {
-        const match = line.match(/^(\w+)\s*=\s*(.+)$/);
-        if (match) existingConfig[match[1]] = match[2].trim();
+        const trimmed = line.trim();
+        if (trimmed === '' || trimmed.startsWith('#')) continue;
+        // Match "key value" or "key=value" (support both formats)
+        let match = trimmed.match(/^(\w+)\s+(.+)$/);
+        if (!match) match = trimmed.match(/^(\w+)\s*=\s*(.+)$/);
+        if (match) {
+          existingConfig[match[1]] = match[2].trim();
+        }
       }
     }
-    const newConfig = {
-      ...existingConfig,
+    
+    // Build only the settings we manage (do NOT overwrite other keys)
+    const updatedSettings = {
       screenWidth: parseInt(settings.resolution?.split('x')[0]) || 1920,
       screenHeight: parseInt(settings.resolution?.split('x')[1]) || 1080,
       fullscreen: settings.displayMode === 'fullscreen' ? 'true' : 'false',
@@ -256,9 +264,14 @@ ipcMain.handle('write-game-options', async (event, installDir, settings) => {
       maxCameraZoom: settings.maxCameraZoom || 10,
       safeMode: settings.safeMode ? 'true' : 'false'
     };
-    const lines = Object.entries(newConfig).map(([k, v]) => `${k} = ${v}`);
+    
+    // Merge: existing config + updated settings (updated settings take precedence)
+    const mergedConfig = { ...existingConfig, ...updatedSettings };
+    
+    // Write back as "key value" format (no equals, space-separated)
+    const lines = Object.entries(mergedConfig).map(([k, v]) => `${k} ${v}`);
     fs.writeFileSync(optionsPath, lines.join('\n'), 'utf8');
-    log(`Updated options.cfg in ${installDir}`);
+    log(`Updated options.cfg in ${installDir} (preserved existing settings)`);
     return { success: true };
   } catch (err) {
     log(`Error writing options.cfg: ${err.message}`, 'ERROR');
@@ -657,33 +670,4 @@ ipcMain.handle('save-scan-mode', (event, mode) => {
   const settingsPath = getSettingsPath();
   const settings = fs.existsSync(settingsPath) ? JSON.parse(fs.readFileSync(settingsPath, 'utf8')) : {};
   settings.scanMode = mode;
-  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
-});
-ipcMain.handle('get-scan-mode', () => {
-  const settingsPath = getSettingsPath();
-  if (fs.existsSync(settingsPath)) try { const s = JSON.parse(fs.readFileSync(settingsPath, 'utf8')); return s.scanMode || 'quick'; } catch(_) { return 'quick'; }
-  return 'quick';
-});
-ipcMain.handle('clear-cache', async () => {
-  try {
-    const cachePaths = [path.join(app.getPath('userData'), 'Cache'), path.join(app.getPath('userData'), 'cache'), path.join(app.getPath('userData'), 'GPUCache')];
-    let cleared = false;
-    for (const p of cachePaths) if (fs.existsSync(p)) { fs.rmSync(p, { recursive: true, force: true }); cleared = true; }
-    return { success: true, message: cleared ? 'Cache cleared' : 'Cache empty' };
-  } catch (error) { return { success: false, error: `Failed: ${error.message}` }; }
-});
-ipcMain.handle('open-logs', async () => {
-  const logPath = path.join(app.getPath('userData'), 'logs');
-  if (!fs.existsSync(logPath)) fs.mkdirSync(logPath, { recursive: true });
-  const logFileFull = path.join(logPath, 'launcher.log');
-  if (!fs.existsSync(logFileFull)) fs.writeFileSync(logFileFull, `SWG Returns Launcher Log\nCreated: ${new Date().toISOString()}\n\n`);
-  shell.openPath(logFileFull);
-  return { success: true };
-});
-
-process.on('uncaughtException', (error) => {
-  try { fs.appendFileSync(logFile, `${new Date().toISOString()} - Uncaught Exception: ${error.stack}\n`); } catch(_) {}
-});
-process.on('unhandledRejection', (reason) => {
-  try { fs.appendFileSync(logFile, `${new Date().toISOString()} - Unhandled Rejection: ${reason}\n`); } catch(_) {}
-});
+  fs.write
