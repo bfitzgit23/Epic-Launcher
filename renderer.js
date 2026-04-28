@@ -1,4 +1,4 @@
-// renderer.js - SWG Returns Launcher (PreCU) with launcher updates section
+// renderer.js - SWG Returns Launcher (PreCU) with all settings
 const { ipcRenderer } = require('electron');
 const fs = require('fs');
 const path = require('path');
@@ -163,7 +163,6 @@ window.addEventListener('DOMContentLoaded', () => {
   if (modalOverlay) modalOverlay.addEventListener('click', closeSettingsModal);
   if (settingsModal) settingsModal.addEventListener('click', (e) => e.stopPropagation());
 
-  // Manual update check
   if (checkUpdatesNowButton) {
     checkUpdatesNowButton.addEventListener('click', async () => {
       updateStatus('Checking for launcher updates...');
@@ -204,7 +203,6 @@ window.addEventListener('DOMContentLoaded', () => {
       if (safeModeCheckbox) safeModeCheckbox.checked = settings.safeMode || false;
       if (shareUsageCheckbox) shareUsageCheckbox.checked = settings.shareUsage || false;
 
-      // Legacy
       if (scanModeSelect) scanModeSelect.value = settings.scanMode || 'quick';
       if (autoLaunchCheckbox) autoLaunchCheckbox.checked = settings.autoLaunch || false;
       if (autoUpdateCheckbox) autoUpdateCheckbox.checked = settings.autoUpdate || false;
@@ -260,7 +258,6 @@ window.addEventListener('DOMContentLoaded', () => {
   }
   if (saveSettingsButton) saveSettingsButton.addEventListener('click', saveSettings);
 
-  // Live display updates
   if (memorySlider && memoryValue) {
     memorySlider.addEventListener('input', (e) => {
       memoryValue.textContent = `${e.target.value} MB`;
@@ -313,6 +310,7 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Play button - FIXED: sends settings object correctly
   if (playButton) {
     playButton.addEventListener('click', async () => {
       if (!installDir) {
@@ -517,6 +515,8 @@ window.addEventListener('DOMContentLoaded', () => {
     const restart = confirm('Update downloaded. Restart now to apply?');
     if (restart) ipcRenderer.invoke('restart-and-update');
   });
+  ipcRenderer.on('update-not-available', () => updateStatus('Launcher is up to date.'));
+  ipcRenderer.on('update-error', (event, err) => updateStatus(`Update check failed: ${err}`));
 
   (async function init() {
     installDir = await ipcRenderer.invoke('get-install-dir');
