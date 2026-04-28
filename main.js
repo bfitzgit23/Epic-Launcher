@@ -1,4 +1,4 @@
-// main.js - SWG Returns Launcher (PreCU) with options.cfg preservation
+// main.js - SWG Returns Launcher (PreCU) with proper INI format preservation
 const { app, BrowserWindow, ipcMain, dialog, shell, screen } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
@@ -245,105 +245,138 @@ ipcMain.handle('save-game-version', (event, version) => {
   fs.writeFileSync(path.join(app.getPath('userData'), 'game_version.txt'), version);
 });
 
-// Write options.cfg from settings - PRESERVES all existing content EXCEPT updated keys
+// Write options.cfg from settings - Preserves INI section format
 ipcMain.handle('write-game-options', async (event, installDir, settings) => {
   const optionsPath = path.join(installDir, 'options.cfg');
   try {
-    // Read existing file content (if any)
-    let existingLines = [];
-    let existingConfig = {};
-
+    // Read the entire original file content
+    let originalLines = [];
     if (fs.existsSync(optionsPath)) {
       const content = fs.readFileSync(optionsPath, 'utf8');
-      existingLines = content.split(/\r?\n/);
-
-      // Parse existing config to know what keys we need to update
-      for (const line of existingLines) {
-        const trimmed = line.trim();
-        if (trimmed === '' || trimmed.startsWith('#')) continue;
-        let match = trimmed.match(/^(\w+)\s+(.+)$/);
-        if (!match) match = trimmed.match(/^(\w+)\s*=\s*(.+)$/);
-        if (match) {
-          existingConfig[match[1]] = match[2].trim();
-        }
-      }
+      originalLines = content.split(/\r?\n/);
     }
-
+    
     // Build the updated values for our managed keys
     const updatedSettings = {
       screenWidth: parseInt(settings.resolution?.split('x')[0]) || 1920,
       screenHeight: parseInt(settings.resolution?.split('x')[1]) || 1080,
-      fullscreen: settings.displayMode === 'fullscreen' ? 'true' : 'false',
-      borderless: settings.displayMode === 'borderless' ? 'true' : 'false',
+      fullscreen: settings.displayMode === 'fullscreen' ? '1' : '0',
+      borderless: settings.displayMode === 'borderless' ? '1' : '0',
+      windowed: settings.displayMode === 'windowed' ? '1' : '0',
       maxFramesPerSecond: settings.fpsLimit || 60,
-      shaderQuality:
-        settings.shaderQuality === 'off'
-          ? '0'
-          : settings.shaderQuality === 'low'
-            ? '1'
-            : settings.shaderQuality === 'medium'
-              ? '2'
-              : '3',
-      cacheSize:
-        settings.cacheSize === 'small' ? '64' : settings.cacheSize === 'medium' ? '128' : '256',
-      soundEnabled: settings.soundEnabled ? 'true' : 'false',
-      hardwareMouseCursor: settings.hardwareCursor ? 'true' : 'false',
-      skipIntro: settings.skipIntro ? 'true' : 'false',
-      textureBaking: settings.textureBaking ? 'true' : 'false',
-      dot3Terrain: settings.dot3Terrain ? 'true' : 'false',
+      shaderQuality: settings.shaderQuality === 'off' ? '0' : (settings.shaderQuality === 'low' ? '1' : (settings.shaderQuality === 'medium' ? '2' : '3')),
+      cache: settings.cacheSize === 'small' ? 'misc/cache_small.iff' : (settings.cacheSize === 'medium' ? 'misc/cache_medium.iff' : 'misc/cache_large.iff'),
+      soundEnabled: settings.soundEnabled ? '1' : '0',
+      useHardwareMouseCursor: settings.hardwareCursor ? '1' : '0',
+      skipIntro: settings.skipIntro ? '1' : '0',
+      textureBaking: settings.textureBaking ? '1' : '0',
+      dot3Terrain: settings.dot3Terrain ? '1' : '0',
       renderer: settings.renderer === 'vulkan' ? 'vulkan' : 'directx',
       maxCameraZoom: settings.maxCameraZoom || 10,
-      safeMode: settings.safeMode ? 'true' : 'false',
+      safeMode: settings.safeMode ? '1' : '0'
     };
-
-    // Build new file content, preserving original lines but updating our keys
-    const updatedKeys = new Set(Object.keys(updatedSettings));
+    
     const newLines = [];
-    const processedKeys = new Set();
-
-    // First, process existing lines and update any that match our keys
-    for (const line of existingLines) {
-      const trimmed = line.trim();
-      if (trimmed === '' || trimmed.startsWith('#')) {
-        // Preserve empty lines and comments unchanged
-        newLines.push(line);
-        continue;
+    let inClientGraphics = false;
+    let inClientAudio = false;
+    let inDirect3d9 = false;
+    let inSharedUtility = false;
+    let updatedKeys = new Set();
+    
+    for (const line of originalLines) {
+      let newLine = line;
+      let updated = false;
+      
+      // Track which section we're in
+      if (line.match(/^\[ClientGraphics\]/)) {
+        inClientGraphics = true;
+        inClientAudio = false;
+        inDirect3d9 = false;
+        inSharedUtility = false;
+      } else if (line.match(/^\[ClientAudio\]/)) {
+        inClientGraphics = false;
+        inClientAudio = true;
+        inDirect3d9 = false;
+        inSharedUtility = false;
+      } else if (line.match(/^\[Direct3d9\]/)) {
+        inClientGraphics = false;
+        inClientAudio = false;
+        inDirect3d9 = true;
+        inSharedUtility = false;
+      } else if (line.match(/^\[SharedUtility\]/)) {
+        inClientGraphics = false;
+        inClientAudio = false;
+        inDirect3d9 = false;
+        inSharedUtility = true;
+      } else if (line.match(/^\[/)) {
+        inClientGraphics = false;
+        inClientAudio = false;
+        inDirect3d9 = false;
+        inSharedUtility = false;
       }
-
-      let match = trimmed.match(/^(\w+)\s+(.+)$/);
-      if (!match) match = trimmed.match(/^(\w+)\s*=\s*(.+)$/);
-
-      if (match && updatedKeys.has(match[1])) {
-        // This is a key we manage – replace its value
-        const key = match[1];
-        const newValue = updatedSettings[key];
-        // Preserve the original spacing style (space or equals)
-        const originalLine = line;
-        let newLine;
-        if (originalLine.includes('=')) {
-          newLine = `${key} = ${newValue}`;
-        } else {
-          newLine = `${key} ${newValue}`;
+      
+      // Update keys in ClientGraphics section
+      if (inClientGraphics) {
+        const match = line.match(/^\s*(\w+)\s*=\s*(.+)$/);
+        if (match) {
+          const key = match[1];
+          if (updatedSettings.hasOwnProperty(key)) {
+            const indent = line.match(/^(\s*)/)[1];
+            newLine = `${indent}${key}=${updatedSettings[key]}`;
+            updatedKeys.add(key);
+            updated = true;
+          }
         }
-        newLines.push(newLine);
-        processedKeys.add(key);
-      } else {
-        // Not a key we manage – preserve as is
-        newLines.push(line);
+      }
+      
+      // Update cache in SharedUtility section
+      if (inSharedUtility) {
+        const match = line.match(/^\s*cache\s*=\s*(.+)$/);
+        if (match) {
+          const indent = line.match(/^(\s*)/)[1];
+          newLine = `${indent}cache=${updatedSettings.cache}`;
+          updatedKeys.add('cache');
+          updated = true;
+        }
+      }
+      
+      newLines.push(updated ? newLine : line);
+    }
+    
+    // Add missing settings to ClientGraphics section if they don't exist
+    const missingKeys = Object.keys(updatedSettings).filter(k => !updatedKeys.has(k) && k !== 'cache');
+    if (missingKeys.length > 0) {
+      // Find where ClientGraphics section ends
+      let clientGraphicsIndex = -1;
+      let insertIndex = -1;
+      for (let i = 0; i < newLines.length; i++) {
+        if (newLines[i].match(/^\[ClientGraphics\]/)) {
+          clientGraphicsIndex = i;
+          insertIndex = i + 1;
+        } else if (clientGraphicsIndex !== -1 && newLines[i].match(/^\[/)) {
+          break;
+        } else if (clientGraphicsIndex !== -1 && insertIndex === clientGraphicsIndex + 1 && newLines[i].trim() === '') {
+          insertIndex = i + 1;
+        }
+      }
+      
+      if (insertIndex !== -1) {
+        const indent = '	';
+        for (const key of missingKeys) {
+          if (key !== 'cache') {
+            newLines.splice(insertIndex, 0, `${indent}${key}=${updatedSettings[key]}`);
+            log(`Added missing option: ${key}`);
+            insertIndex++;
+          }
+        }
       }
     }
-
-    // Add any missing keys that weren't in the original file
-    for (const [key, value] of Object.entries(updatedSettings)) {
-      if (!processedKeys.has(key)) {
-        newLines.push(`${key} ${value}`);
-        log(`Added missing option: ${key}`);
-      }
-    }
-
-    // Write back the preserved file
-    fs.writeFileSync(optionsPath, newLines.join('\n'), 'utf8');
-    log(`Updated options.cfg in ${installDir} (preserved all non-managed settings)`);
+    
+    // Write back the file
+    const newContent = newLines.join('\n');
+    fs.writeFileSync(optionsPath, newContent, 'utf8');
+    
+    log(`Updated options.cfg in ${installDir} (preserved INI format and all non-managed settings)`);
     return { success: true };
   } catch (err) {
     log(`Error writing options.cfg: ${err.message}`, 'ERROR');
