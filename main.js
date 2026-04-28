@@ -670,4 +670,33 @@ ipcMain.handle('save-scan-mode', (event, mode) => {
   const settingsPath = getSettingsPath();
   const settings = fs.existsSync(settingsPath) ? JSON.parse(fs.readFileSync(settingsPath, 'utf8')) : {};
   settings.scanMode = mode;
-  fs.write
+  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+});
+ipcMain.handle('get-scan-mode', () => {
+  const settingsPath = getSettingsPath();
+  if (fs.existsSync(settingsPath)) try { const s = JSON.parse(fs.readFileSync(settingsPath, 'utf8')); return s.scanMode || 'quick'; } catch(_) { return 'quick'; }
+  return 'quick';
+});
+ipcMain.handle('clear-cache', async () => {
+  try {
+    const cachePaths = [path.join(app.getPath('userData'), 'Cache'), path.join(app.getPath('userData'), 'cache'), path.join(app.getPath('userData'), 'GPUCache')];
+    let cleared = false;
+    for (const p of cachePaths) if (fs.existsSync(p)) { fs.rmSync(p, { recursive: true, force: true }); cleared = true; }
+    return { success: true, message: cleared ? 'Cache cleared' : 'Cache empty' };
+  } catch (error) { return { success: false, error: `Failed: ${error.message}` }; }
+});
+ipcMain.handle('open-logs', async () => {
+  const logPath = path.join(app.getPath('userData'), 'logs');
+  if (!fs.existsSync(logPath)) fs.mkdirSync(logPath, { recursive: true });
+  const logFileFull = path.join(logPath, 'launcher.log');
+  if (!fs.existsSync(logFileFull)) fs.writeFileSync(logFileFull, `SWG Returns Launcher Log\nCreated: ${new Date().toISOString()}\n\n`);
+  shell.openPath(logFileFull);
+  return { success: true };
+});
+
+process.on('uncaughtException', (error) => {
+  try { fs.appendFileSync(logFile, `${new Date().toISOString()} - Uncaught Exception: ${error.stack}\n`); } catch(_) {}
+});
+process.on('unhandledRejection', (reason) => {
+  try { fs.appendFileSync(logFile, `${new Date().toISOString()} - Unhandled Rejection: ${reason}\n`); } catch(_) {}
+});
