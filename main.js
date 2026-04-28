@@ -1,4 +1,4 @@
-// main.js - SWG Returns Launcher (PreCU) with manual update check
+// main.js - SWG Returns Launcher (PreCU) with full game options & manual update check
 const { app, BrowserWindow, ipcMain, dialog, shell, screen } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
@@ -353,6 +353,9 @@ ipcMain.handle('launch-game', async (event, { exePath, settings }) => {
     gameProcess.on('error', (err) => {
       log(`Spawn error: ${err.message}`, 'ERROR');
       reject(err);
+    });
+    gameProcess.on('exit', (code) => {
+      log(`Game process exited with code ${code}`);
     });
     gameProcess.unref();
     if (gameProcess.pid) {
