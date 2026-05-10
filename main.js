@@ -23,7 +23,7 @@ let mainWindow;
 let rpc;
 
 // --- UPDATED: carbonite subfolder ---
-const BASE_URL = 'http://15.204.254.253/tre/carbonite/';
+const BASE_URL = 'http://15.204.254.253/tre/';
 const VERSION_URL = `${BASE_URL}version.txt`;
 const GAME_SERVER_IP = '144.217.255.58';
 const GAME_SERVER_PORT = 44453;
