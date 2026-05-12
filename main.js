@@ -1,11 +1,11 @@
-// main.js - SWG Returns Launcher (PreCU) – fully functional
+// main.js - SWG Returns Launcher (PreCU) – original working launch + login config writer
 const { app, BrowserWindow, ipcMain, dialog, shell, screen } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
 const crypto = require('crypto');
-const { exec } = require('child_process');
+const { spawn } = require('child_process');
 const axios = require('axios');
 
 let DiscordRPC;
@@ -22,8 +22,11 @@ app.commandLine.appendSwitch('force-device-scale-factor', '1');
 let mainWindow;
 let rpc;
 
+// Patch server (downloads)
 const BASE_URL = 'http://15.204.254.253/tre/';
 const VERSION_URL = `${BASE_URL}version.txt`;
+
+// Game login server (client connects here)
 const GAME_SERVER_IP = '144.217.255.58';
 const GAME_SERVER_PORT = 44453;
 
@@ -221,7 +224,7 @@ ipcMain.handle('save-game-version', (event, version) => {
   fs.writeFileSync(path.join(app.getPath('userData'), 'game_version.txt'), version);
 });
 
-// ---------- OPTIONS.CFG WRITER (preserves structure, only updates managed keys) ----------
+// ---------- OPTIONS.CFG WRITER (preserves structure, writes login config) ----------
 ipcMain.handle('write-game-options', async (event, installDir, settings) => {
   const optionsPath = path.join(installDir, 'options.cfg');
   try {
@@ -242,11 +245,21 @@ ipcMain.handle('write-game-options', async (event, installDir, settings) => {
       ];
     }
 
-    const updates = [];
+    const fpsLimit = settings.fpsLimit || 60;
     const [width, height] = (settings.resolution || '1920x1080').split('x');
-    updates.push({ section: 'ClientGraphics', key: 'screenWidth', value: parseInt(width, 10) });
-    updates.push({ section: 'ClientGraphics', key: 'screenHeight', value: parseInt(height, 10) });
-    
+
+    const updates = [
+      { section: 'ClientGraphics', key: 'screenWidth', value: parseInt(width, 10) },
+      { section: 'ClientGraphics', key: 'screenHeight', value: parseInt(height, 10) },
+      { section: 'ClientGraphics', key: 'useHardwareMouseCursor', value: settings.hardwareCursor ? 1 : 0 },
+      { section: 'ClientGame', key: 'skipIntro', value: settings.skipIntro ? 1 : 0 },
+      { section: 'ClientGraphics', key: 'textureBaking', value: settings.textureBaking ? 1 : 0 },
+      { section: 'ClientGraphics', key: 'dot3Terrain', value: settings.dot3Terrain ? 1 : 0 },
+      { section: 'SharedUtility', key: 'cache', value: settings.cacheSize === 'small' ? 'misc/cache_small.iff' : (settings.cacheSize === 'medium' ? 'misc/cache_medium.iff' : 'misc/cache_large.iff') },
+      { section: 'ClientGraphics', key: 'maxCameraZoom', value: settings.maxCameraZoom || 10 },
+      { section: 'Direct3d9', key: 'fullscreenRefreshRate', value: fpsLimit },
+    ];
+
     if (settings.displayMode === 'fullscreen') {
       updates.push({ section: 'ClientGraphics', key: 'windowed', value: 0 });
       updates.push({ section: 'ClientGraphics', key: 'borderlessWindow', value: 0 });
@@ -257,14 +270,8 @@ ipcMain.handle('write-game-options', async (event, installDir, settings) => {
       updates.push({ section: 'ClientGraphics', key: 'windowed', value: 0 });
       updates.push({ section: 'ClientGraphics', key: 'borderlessWindow', value: 1 });
     }
-    
-    updates.push({ section: 'ClientGraphics', key: 'useHardwareMouseCursor', value: settings.hardwareCursor ? 1 : 0 });
-    updates.push({ section: 'ClientGame', key: 'skipIntro', value: settings.skipIntro ? 1 : 0 });
-    updates.push({ section: 'ClientGraphics', key: 'textureBaking', value: settings.textureBaking ? 1 : 0 });
-    updates.push({ section: 'ClientGraphics', key: 'dot3Terrain', value: settings.dot3Terrain ? 1 : 0 });
-    updates.push({ section: 'SharedUtility', key: 'cache', value: settings.cacheSize === 'small' ? 'misc/cache_small.iff' : (settings.cacheSize === 'medium' ? 'misc/cache_medium.iff' : 'misc/cache_large.iff') });
-    updates.push({ section: 'ClientGraphics', key: 'maxCameraZoom', value: settings.maxCameraZoom || 10 });
 
+    // Parse existing file into sections
     const sections = {};
     let currentSection = null;
     let currentLines = [];
@@ -280,6 +287,7 @@ ipcMain.handle('write-game-options', async (event, installDir, settings) => {
     }
     if (currentSection) sections[currentSection] = currentLines;
 
+    // Apply updates
     for (const update of updates) {
       const section = update.section;
       const key = update.key;
@@ -300,6 +308,7 @@ ipcMain.handle('write-game-options', async (event, installDir, settings) => {
       if (!keyFound) sectionLines.push(`\t${key}=${value}`);
     }
 
+    // Rebuild file in the order sections appeared
     const newLines = [];
     for (const [sectionName, lines] of Object.entries(sections)) {
       newLines.push(...lines);
@@ -309,9 +318,16 @@ ipcMain.handle('write-game-options', async (event, installDir, settings) => {
 
     fs.writeFileSync(optionsPath, newLines.join('\n'), 'utf8');
     log(`Updated options.cfg in ${installDir}`);
+
+    // ---------- Write swgemu_login.cfg (login server config) ----------
+    const loginCfgPath = path.join(installDir, 'swgemu_login.cfg');
+    const loginCfg = `[ClientGame]\r\nloginServerAddress0=${GAME_SERVER_IP}\r\nloginServerPort0=${GAME_SERVER_PORT}\r\nfreeChaseCameraMaximumZoom=${settings.maxCameraZoom || 10}\r\n0fd345d9 = true\r\n`;
+    fs.writeFileSync(loginCfgPath, loginCfg, 'utf8');
+    log(`Written swgemu_login.cfg with IP ${GAME_SERVER_IP}:${GAME_SERVER_PORT}`);
+
     return { success: true };
   } catch (err) {
-    log(`Error writing options.cfg: ${err.message}`, 'ERROR');
+    log(`Error writing configs: ${err.message}`, 'ERROR');
     return { success: false, error: err.message };
   }
 });
@@ -357,7 +373,7 @@ ipcMain.handle('test-exe', async (event, exePath) => {
   }
 });
 
-// Launch game using cmd /c start
+// ---------- ORIGINAL WORKING LAUNCH (spawn with no arguments) ----------
 ipcMain.handle('launch-game', async (event, { exePath, settings }) => {
   return new Promise((resolve, reject) => {
     if (!fs.existsSync(exePath)) {
@@ -365,19 +381,34 @@ ipcMain.handle('launch-game', async (event, { exePath, settings }) => {
       return;
     }
     const exeDir = path.dirname(exePath);
-    const command = `cmd /c start "" "${exePath}"`;
-    log(`Launch command: ${command}`);
-    const child = exec(command, { cwd: exeDir }, (error, stdout, stderr) => {
-      if (error) {
-        log(`Start command error: ${error.message}`, 'ERROR');
-        reject(error);
-      } else {
-        log(`Start command succeeded`);
-        resolve({ success: true, method: 'cmd_start' });
-      }
+    log(`Launching: ${exePath}`);
+    log(`Working directory: ${exeDir}`);
+
+    const gameProcess = spawn(exePath, [], {
+      cwd: exeDir,
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: false
     });
-    child.unref();
-    updateDiscordStatus('playing', 'Playing Star Wars Galaxies');
+
+    gameProcess.on('error', (err) => {
+      log(`Spawn error: ${err.message}`, 'ERROR');
+      reject(err);
+    });
+
+    gameProcess.on('exit', (code) => {
+      log(`Game process exited with code ${code}`);
+    });
+
+    gameProcess.unref();
+
+    if (gameProcess.pid) {
+      updateDiscordStatus('playing', 'Playing Star Wars Galaxies');
+      log(`Game launched with PID: ${gameProcess.pid}`);
+      resolve({ success: true, pid: gameProcess.pid });
+    } else {
+      reject(new Error('Failed to obtain process ID'));
+    }
   });
 });
 
@@ -513,7 +544,7 @@ ipcMain.handle('patcher-resume', () => {
   log('Patcher resumed');
 });
 
-// Server status (patch server)
+// Server status (patch server – http ping)
 ipcMain.handle('server-status', async () => {
   const start = Date.now();
   try {
@@ -615,7 +646,6 @@ ipcMain.handle('download-file', async (event, { url, destination, expectedMd5 })
   });
 });
 
-// ---------- DIRECTORY AND FILE SELECTION ----------
 ipcMain.handle('select-directory', async () => {
   const result = await dialog.showOpenDialog({
     properties: ['openDirectory'],
