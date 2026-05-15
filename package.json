@@ -1,5 +1,5 @@
 {
-  "name": "SWG-Talon-Online-Launcher-launcher",
+  "name": "SWG-Talon-Online-Launcher",
   "version": "1.2.1",
   "description": "SWG-Talon-Online-Launcher Launcher",
   "main": "main.js",
@@ -7,7 +7,7 @@
   "license": "CC0-1.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/bfitzgit23/SWG-Talon-Online-Launcher-Launcher"
+    "url": "https://github.com/bfitzgit23/SWG-Talon-Online-Launcher"
   },
   "homepage": "",
   "keywords": [
@@ -51,8 +51,8 @@
     "uuid": "^9.0.0"
   },
   "build": {
-    "appId": "com.SWG-Talon-Online-Launcher-Launcher.launcher",
-    "productName": "SWG-Talon-Online-Launcher Launcher",
+    "appId": "com.SWG-Talon-Online.launcher",
+    "productName": "SWG-Talon-Online Launcher",
     "directories": {
       "buildResources": "build",
       "output": "dist"
