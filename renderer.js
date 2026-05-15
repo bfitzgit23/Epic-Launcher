@@ -1,4 +1,4 @@
-// renderer.js - SWG Returns Launcher (NGE / SwgClient_r.exe)
+// renderer.js - SWG-Talon-Online Launcher (NGE)
 const { ipcRenderer } = require('electron');
 const fs = require('fs');
 const path = require('path');
@@ -49,10 +49,8 @@ window.addEventListener('DOMContentLoaded', () => {
   const launcherVersionSpan = getElement('launcher-version');
   const checkUpdatesNowButton = getElement('check-updates-now');
 
-  // Theme selector
   const themeSelect = getElement('theme-select');
 
-  // Game settings (unchanged)
   const resolutionSelect = getElement('resolution-select');
   const displayModeSelect = getElement('display-mode-select');
   const fpsLimitSelect = getElement('fps-limit-select');
@@ -75,7 +73,6 @@ window.addEventListener('DOMContentLoaded', () => {
   const safeModeCheckbox = getElement('safe-mode-checkbox');
   const shareUsageCheckbox = getElement('share-usage-checkbox');
 
-  // Legacy hidden
   const scanModeSelect = getElement('scan-mode-select');
   const autoLaunchCheckbox = getElement('auto-launch-checkbox');
   const autoUpdateCheckbox = getElement('auto-update-checkbox');
@@ -84,7 +81,6 @@ window.addEventListener('DOMContentLoaded', () => {
   const zoomSlider = getElement('zoom-slider');
   const zoomValue = getElement('zoom-value');
 
-  // State
   let isScanning = false;
   let isPaused = false;
   let installDir = null;
