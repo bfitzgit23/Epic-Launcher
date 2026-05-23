@@ -1,15 +1,15 @@
 {
-  "name": "SWG-Talon-Online-Launcher",
+  "name": "SWG-Returns-Launcher",
   "version": "1.2.1",
-  "description": "SWG-Talon-Online-Launcher Launcher",
+  "description": "SWG-Returns-Launcher Launcher",
   "main": "main.js",
-  "author": "SWG-Talon-Online-Launcher_Dev",
+  "author": "SWG-Returns-Launcher_Dev",
   "license": "CC0-1.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/bfitzgit23/SWG-Talon-Online-Launcher"
+    "url": "https://github.com/bfitzgit23/SWG-Returns-Launcher"
   },
-  "homepage": "https://register.swgtalon.online/index.php",
+  "homepage": "https://swgreturns.github.io/",
   "keywords": [
     "launcher",
     "installer",
@@ -51,8 +51,8 @@
     "uuid": "^9.0.0"
   },
   "build": {
-    "appId": "com.SWG-Talon-Online.launcher",
-    "productName": "SWG-Talon-Online Launcher",
+    "appId": "com.SWG-Returns.launcher",
+    "productName": "SWG-Returns Launcher",
     "directories": {
       "buildResources": "build",
       "output": "dist"
