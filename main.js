@@ -1,4 +1,4 @@
-// main.js - SWG-Talon-Online Launcher (NGE / SWG-Source)
+// main.js - SWG Returns Launcher (PreCU) – final version with tooltip font size
 const { app, BrowserWindow, ipcMain, dialog, shell, screen } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
@@ -23,11 +23,11 @@ let mainWindow;
 let rpc;
 
 // Patch server (downloads)
-const BASE_URL = 'http://15.204.254.253/tre/nge/';
+const BASE_URL = 'http://15.204.254.253/tre/';
 const VERSION_URL = `${BASE_URL}version.txt`;
 
-// Game login server (client connects here)
-const GAME_SERVER_IP = '93.90.205.211';
+// Game login server
+const GAME_SERVER_IP = '144.217.255.58';
 const GAME_SERVER_PORT = 44453;
 
 const logFile = path.join(app.getPath('userData'), 'logs', 'launcher.log');
@@ -115,7 +115,7 @@ function detectInstallDir() {
     app.getPath('home') + '\\SWGEmu',
   ];
   for (const p of commonPaths) {
-    if (fs.existsSync(p) && fs.existsSync(path.join(p, 'SwgClient_r.exe'))) return p;
+    if (fs.existsSync(p) && fs.existsSync(path.join(p, 'SWGEmu.exe'))) return p;
   }
   return null;
 }
@@ -180,6 +180,7 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 
+// IPC: Window controls
 ipcMain.handle('window:minimize', () => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.minimize(); });
 ipcMain.handle('window:maximizeToggle', () => {
   if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -205,6 +206,7 @@ ipcMain.handle('set-zoom', async (event, percent) => {
   }
 });
 
+// Game version checker
 ipcMain.handle('check-game-version', async () => {
   try {
     const response = await axios.get(VERSION_URL, { timeout: 5000 });
@@ -222,6 +224,7 @@ ipcMain.handle('save-game-version', (event, version) => {
   fs.writeFileSync(path.join(app.getPath('userData'), 'game_version.txt'), version);
 });
 
+// ---------- OPTIONS.CFG WRITER (preserves structure, writes login config) ----------
 ipcMain.handle('write-game-options', async (event, installDir, settings) => {
   const optionsPath = path.join(installDir, 'options.cfg');
   try {
@@ -268,6 +271,7 @@ ipcMain.handle('write-game-options', async (event, installDir, settings) => {
       updates.push({ section: 'ClientGraphics', key: 'borderlessWindow', value: 1 });
     }
 
+    // Parse existing file into sections
     const sections = {};
     let currentSection = null;
     let currentLines = [];
@@ -283,6 +287,7 @@ ipcMain.handle('write-game-options', async (event, installDir, settings) => {
     }
     if (currentSection) sections[currentSection] = currentLines;
 
+    // Apply updates
     for (const update of updates) {
       const section = update.section;
       const key = update.key;
@@ -303,6 +308,7 @@ ipcMain.handle('write-game-options', async (event, installDir, settings) => {
       if (!keyFound) sectionLines.push(`\t${key}=${value}`);
     }
 
+    // Rebuild file in the order sections appeared
     const newLines = [];
     for (const [sectionName, lines] of Object.entries(sections)) {
       newLines.push(...lines);
@@ -313,6 +319,7 @@ ipcMain.handle('write-game-options', async (event, installDir, settings) => {
     fs.writeFileSync(optionsPath, newLines.join('\n'), 'utf8');
     log(`Updated options.cfg in ${installDir}`);
 
+    // ---------- Write swgemu_login.cfg (login server config) ----------
     const loginCfgPath = path.join(installDir, 'swgemu_login.cfg');
     const loginCfg = `[ClientGame]\r\nloginServerAddress0=${GAME_SERVER_IP}\r\nloginServerPort0=${GAME_SERVER_PORT}\r\nfreeChaseCameraMaximumZoom=${settings.maxCameraZoom || 10}\r\n0fd345d9 = true\r\n`;
     fs.writeFileSync(loginCfgPath, loginCfg, 'utf8');
@@ -325,6 +332,47 @@ ipcMain.handle('write-game-options', async (event, installDir, settings) => {
   }
 });
 
+// ---------- TOOLTIP FONT SIZE HANDLER ----------
+ipcMain.handle('set-tooltip-font-size', async (event, installDir, fontSize) => {
+  const uiStylesPath = path.join(installDir, 'ui', 'ui_styles.inc');
+  const customPath = path.join(installDir, 'ui', 'zz_tooltip_override.inc');
+  const tooltipBlock = `TooltipBody\n{\n\tfontsize = ${fontSize}\n\tfontname = "Verdana"\n}\n`;
+
+  try {
+    // Ensure the ui directory exists
+    const uiDir = path.join(installDir, 'ui');
+    if (!fs.existsSync(uiDir)) fs.mkdirSync(uiDir, { recursive: true });
+
+    // Method 1: Try to modify existing ui_styles.inc
+    if (fs.existsSync(uiStylesPath)) {
+      let content = fs.readFileSync(uiStylesPath, 'utf8');
+      // Remove previous launcher override block
+      const startMarker = '/* Launcher tooltip override start */';
+      const endMarker = '/* Launcher tooltip override end */';
+      const startIdx = content.indexOf(startMarker);
+      if (startIdx !== -1) {
+        const endIdx = content.indexOf(endMarker, startIdx);
+        if (endIdx !== -1) {
+          content = content.slice(0, startIdx) + content.slice(endIdx + endMarker.length);
+        }
+      }
+      // Append new override
+      content += `\n${startMarker}\n${tooltipBlock}${endMarker}\n`;
+      fs.writeFileSync(uiStylesPath, content, 'utf8');
+      log(`Updated tooltip font size to ${fontSize}px in ${uiStylesPath}`);
+    } else {
+      // Method 2: Create custom override file
+      fs.writeFileSync(customPath, tooltipBlock, 'utf8');
+      log(`Created tooltip override file with font size ${fontSize}px`);
+    }
+    return { success: true };
+  } catch (err) {
+    log(`Error setting tooltip font size: ${err.message}`, 'ERROR');
+    return { success: false, error: err.message };
+  }
+});
+
+// FPS patching
 ipcMain.handle('patch-game-fps', async (event, exePath, fps) => {
   return new Promise(resolve => {
     if (!fs.existsSync(exePath)) {
@@ -340,7 +388,7 @@ ipcMain.handle('patch-game-fps', async (event, exePath, fps) => {
         floatBuf.writeFloatLE(fps);
         fs.writeSync(fd, floatBuf, 0, 4, 0x1156);
         fs.closeSync(fd);
-        log(`Patched SwgClient_r.exe FPS to ${fps}`);
+        log(`Patched SWGEmu.exe FPS to ${fps}`);
         resolve({ success: true });
       } else {
         fs.closeSync(fd);
@@ -365,6 +413,7 @@ ipcMain.handle('test-exe', async (event, exePath) => {
   }
 });
 
+// Original working launch (spawn with no arguments)
 ipcMain.handle('launch-game', async (event, { exePath, settings }) => {
   return new Promise((resolve, reject) => {
     if (!fs.existsSync(exePath)) {
@@ -386,9 +435,11 @@ ipcMain.handle('launch-game', async (event, { exePath, settings }) => {
       log(`Spawn error: ${err.message}`, 'ERROR');
       reject(err);
     });
+
     gameProcess.on('exit', (code) => {
       log(`Game process exited with code ${code}`);
     });
+
     gameProcess.unref();
 
     if (gameProcess.pid) {
@@ -401,6 +452,7 @@ ipcMain.handle('launch-game', async (event, { exePath, settings }) => {
   });
 });
 
+// ---------- PATCHER (multithread, resume, speed limit) ----------
 let activeDownloads = new Map();
 let downloadQueue = [];
 let isDownloading = false;
@@ -532,6 +584,7 @@ ipcMain.handle('patcher-resume', () => {
   log('Patcher resumed');
 });
 
+// Server status (patch server – http ping)
 ipcMain.handle('server-status', async () => {
   const start = Date.now();
   try {
@@ -542,6 +595,7 @@ ipcMain.handle('server-status', async () => {
   }
 });
 
+// Log viewer
 ipcMain.handle('get-log-content', () => {
   if (fs.existsSync(logFile)) return fs.readFileSync(logFile, 'utf8');
   return '';
@@ -562,6 +616,7 @@ ipcMain.handle('open-log-viewer', () => {
 
 ipcMain.handle('detect-install-dir', () => detectInstallDir());
 
+// ---------- FILE MANAGEMENT HANDLERS ----------
 ipcMain.handle('load-required-files', async () => {
   return new Promise((resolve, reject) => {
     const url = BASE_URL + 'required-files.json';
@@ -643,13 +698,14 @@ ipcMain.handle('select-directory', async () => {
 ipcMain.handle('select-file', async () => {
   const result = await dialog.showOpenDialog({
     properties: ['openFile'],
-    title: 'Select SwgClient_r.exe',
+    title: 'Select SWGEmu.exe',
     filters: [{ name: 'Executable Files', extensions: ['exe'] }]
   });
   if (!result.canceled && result.filePaths.length > 0) return result.filePaths[0];
   return null;
 });
 
+// ---------- SETTINGS MANAGEMENT ----------
 const getSettingsPath = () => path.join(app.getPath('userData'), 'settings.json');
 ipcMain.handle('save-settings', (event, settings) => {
   try {
@@ -658,7 +714,9 @@ ipcMain.handle('save-settings', (event, settings) => {
     const merged = { ...existing, ...settings };
     fs.writeFileSync(settingsPath, JSON.stringify(merged, null, 2));
     return { success: true };
-  } catch (error) { return { success: false, error: error.message }; }
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
 });
 ipcMain.handle('get-settings', () => {
   const settingsPath = getSettingsPath();
@@ -699,11 +757,12 @@ ipcMain.handle('open-logs', async () => {
   const logPath = path.join(app.getPath('userData'), 'logs');
   if (!fs.existsSync(logPath)) fs.mkdirSync(logPath, { recursive: true });
   const logFileFull = path.join(logPath, 'launcher.log');
-  if (!fs.existsSync(logFileFull)) fs.writeFileSync(logFileFull, `SWG-Talon-Online Launcher Log\nCreated: ${new Date().toISOString()}\n\n`);
+  if (!fs.existsSync(logFileFull)) fs.writeFileSync(logFileFull, `SWG Returns Launcher Log\nCreated: ${new Date().toISOString()}\n\n`);
   shell.openPath(logFileFull);
   return { success: true };
 });
 
+// ---------- ERROR HANDLERS ----------
 process.on('uncaughtException', error => {
   try { fs.appendFileSync(logFile, `${new Date().toISOString()} - Uncaught Exception: ${error.stack}\n`); } catch(_) {}
 });
