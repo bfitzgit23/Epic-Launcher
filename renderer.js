@@ -1,4 +1,4 @@
-// renderer.js - SWG-Talon-Online Launcher (NGE)
+// renderer.js - SWG Returns Launcher (full features + tooltip font size)
 const { ipcRenderer } = require('electron');
 const fs = require('fs');
 const path = require('path');
@@ -49,8 +49,14 @@ window.addEventListener('DOMContentLoaded', () => {
   const launcherVersionSpan = getElement('launcher-version');
   const checkUpdatesNowButton = getElement('check-updates-now');
 
+  // Theme selector
   const themeSelect = getElement('theme-select');
 
+  // Tooltip font size slider
+  const tooltipFontSlider = getElement('tooltip-font-slider');
+  const tooltipFontValue = getElement('tooltip-font-value');
+
+  // Game settings
   const resolutionSelect = getElement('resolution-select');
   const displayModeSelect = getElement('display-mode-select');
   const fpsLimitSelect = getElement('fps-limit-select');
@@ -73,6 +79,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const safeModeCheckbox = getElement('safe-mode-checkbox');
   const shareUsageCheckbox = getElement('share-usage-checkbox');
 
+  // Legacy hidden
   const scanModeSelect = getElement('scan-mode-select');
   const autoLaunchCheckbox = getElement('auto-launch-checkbox');
   const autoUpdateCheckbox = getElement('auto-update-checkbox');
@@ -81,6 +88,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const zoomSlider = getElement('zoom-slider');
   const zoomValue = getElement('zoom-value');
 
+  // State
   let isScanning = false;
   let isPaused = false;
   let installDir = null;
@@ -222,6 +230,11 @@ window.addEventListener('DOMContentLoaded', () => {
         themeSelect.value = savedTheme;
         applyTheme(savedTheme);
       }
+      if (tooltipFontSlider && tooltipFontValue) {
+        const savedSize = settings.tooltipFontSize || 12;
+        tooltipFontSlider.value = savedSize;
+        tooltipFontValue.textContent = `${savedSize} px`;
+      }
     } catch (error) { console.error('Failed to load settings:', error); }
   }
 
@@ -253,11 +266,14 @@ window.addEventListener('DOMContentLoaded', () => {
         minimizeToTray: minimizeToTrayCheckbox ? minimizeToTrayCheckbox.checked : false,
         timeout: timeoutInput ? parseInt(timeoutInput.value, 10) || 30 : 30,
         zoom: zoomSlider ? parseInt(zoomSlider.value, 10) : 100,
-        theme: themeSelect ? themeSelect.value : 'default'
+        theme: themeSelect ? themeSelect.value : 'default',
+        tooltipFontSize: tooltipFontSlider ? parseInt(tooltipFontSlider.value, 10) : 12
       };
       await ipcRenderer.invoke('save-settings', settings);
       if (installDir) {
         await ipcRenderer.invoke('write-game-options', installDir, settings);
+        // Apply tooltip font size
+        await ipcRenderer.invoke('set-tooltip-font-size', installDir, settings.tooltipFontSize);
       }
       applyTheme(settings.theme);
       updateStatus('Settings saved successfully');
@@ -268,6 +284,7 @@ window.addEventListener('DOMContentLoaded', () => {
   }
   if (saveSettingsButton) saveSettingsButton.addEventListener('click', saveSettings);
 
+  // Sliders live update
   if (memorySlider && memoryValue) {
     memorySlider.addEventListener('input', (e) => { memoryValue.textContent = `${e.target.value} MB`; });
   }
@@ -279,6 +296,11 @@ window.addEventListener('DOMContentLoaded', () => {
       const val = parseInt(e.target.value, 10);
       zoomValue.textContent = `${val}%`;
       await ipcRenderer.invoke('set-zoom', val);
+    });
+  }
+  if (tooltipFontSlider && tooltipFontValue) {
+    tooltipFontSlider.addEventListener('input', (e) => {
+      tooltipFontValue.textContent = `${e.target.value} px`;
     });
   }
 
@@ -298,7 +320,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
   async function checkExeStatus() {
     if (!installDir) { if (exeStatusSpan) exeStatusSpan.textContent = 'No directory'; return; }
-    const exePath = path.join(installDir, 'SwgClient_r.exe');
+    const exePath = path.join(installDir, 'SWGEmu.exe');
     if (!fs.existsSync(exePath)) { if (exeStatusSpan) exeStatusSpan.textContent = 'Not found'; return; }
     const result = await ipcRenderer.invoke('test-exe', exePath);
     if (exeStatusSpan) exeStatusSpan.textContent = result.valid ? `Valid (${result.version || 'v?'})` : `Invalid: ${result.error}`;
@@ -306,8 +328,8 @@ window.addEventListener('DOMContentLoaded', () => {
   if (testExeButton) {
     testExeButton.addEventListener('click', async () => {
       if (!installDir) { updateStatus('Set install directory first'); return; }
-      const exePath = path.join(installDir, 'SwgClient_r.exe');
-      if (!fs.existsSync(exePath)) { updateStatus('SwgClient_r.exe not found'); return; }
+      const exePath = path.join(installDir, 'SWGEmu.exe');
+      if (!fs.existsSync(exePath)) { updateStatus('SWGEmu.exe not found'); return; }
       updateStatus('Testing EXE...');
       const result = await ipcRenderer.invoke('test-exe', exePath);
       if (result.valid) updateStatus(`EXE valid, version: ${result.version || 'unknown'}`);
@@ -323,9 +345,9 @@ window.addEventListener('DOMContentLoaded', () => {
         await showInstallLocationDialog();
         if (!installDir) return;
       }
-      let exePath = path.join(installDir, 'SwgClient_r.exe');
+      let exePath = path.join(installDir, 'SWGEmu.exe');
       if (!fs.existsSync(exePath)) {
-        updateStatus('SwgClient_r.exe not found. Please locate manually.');
+        updateStatus('SWGEmu.exe not found. Please locate manually.');
         const picked = await ipcRenderer.invoke('select-file');
         if (!picked) return;
         exePath = picked;
@@ -345,7 +367,7 @@ window.addEventListener('DOMContentLoaded', () => {
         }
         await ipcRenderer.invoke('write-game-options', installDir, settings);
         const result = await ipcRenderer.invoke('launch-game', { exePath, settings });
-        updateStatus(`SwgClient_r.exe launched successfully (PID: ${result.pid})`);
+        updateStatus(`SWGEmu.exe launched successfully (PID: ${result.pid})`);
       } catch (error) {
         updateStatus(`Launch failed: ${error.message}`);
         alert(`Failed to launch game:\n${error.message}\n\nCheck antivirus or file permissions.`);
