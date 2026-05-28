@@ -1,8 +1,8 @@
 {
-  "address": "93.90.205.211",
+  "address": "144.217.255.58",
   "port": "44453",
-  "manifestUrl": "http://15.204.254.253/tre/nge/required-files.json",
-  "baseUrl": "http://15.204.254.253/tre/nge"
+  "manifestUrl": "http://178.105.215.223/tre/nge/required-files.json",
+  "baseUrl": "http://178.105.215.223/tre/nge"
 }
 
 
