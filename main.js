@@ -23,7 +23,7 @@ let mainWindow;
 let rpc;
 
 // Patch server (downloads)
-const BASE_URL = 'http://144.217.255.58/tre/';
+const BASE_URL = 'http://51.81.81.116/tre/';
 const VERSION_URL = `${BASE_URL}version.txt`;
 
 // Game login server
